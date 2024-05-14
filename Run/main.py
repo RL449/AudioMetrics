@@ -85,13 +85,13 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     ifrFinal = ifr[ifrSize - 1]
     print("ifrFinal: " + str(ifrFinal))
 
-    print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
+    # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
     midValue = ifr[int(ifrSize / 2)]
-    print("MidValue: " + str(midValue))
+    # print("MidValue: " + str(midValue))
     ifr = np.delete(ifr, int(ifrSize / 2), None)
     ifr = np.delete(ifr, int(ifrSize / 2), None)
-    print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
+    # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
     ifrLastPlusOne = ifrFinal + 1
     print("ifrLastPlusOne: " + str(ifrLastPlusOne))
@@ -101,12 +101,12 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     ifr = np.insert(ifr, len(ifr), ifrLastPlusOne)
     ifr = np.insert(ifr, len(ifr), ifrLastPlusTwo)
 
+    print("ifr size: " + str(len(ifr)))
     # print("ifr First 100: ", ifr[:100])
     # print("ifr Final 100: ", ifr[-100:])
     # print("ifrHalfTwo", ifrHalfTwo)
 
     # print("ifr first half: " + str(ifr[:int(len(ifr) / 2) + 2]))
-
     # print("ifr middle: " + str(ifr[int(len(ifr) / 2) - 4:int(len(ifr) / 2) + 4]))
 
     # ifrSecond = ifr[int(len(ifr) / 2):]
@@ -118,11 +118,15 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     # print("ifr: " + str(ifr[len(ifr) - 10:]))
 
     filtspec2 = np.zeros_like(spec, dtype=complex)
+    # print("filtspec2 size: " + str(len(filtspec2)))
     rspec = np.zeros_like(spec)
+    # print("rspec size: " + str(len(rspec)))
     ispec = np.zeros_like(spec)
-
+    # print("ispec size: " + str(len(ispec)))
     rspec[ifr] = aspec[ifr] * np.cos(pspec[ifr])
+
     ispec[ifr] = aspec[ifr] * np.sin(pspec[ifr])
+
     filtspec2.real = rspec
     filtspec2.imag = ispec
 
@@ -130,6 +134,8 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     filtspec1[1:-1] *= 2
 
     tsfilt = np.real(np.fft.ifft(filtspec2, npts))
+    for i in range(100):
+        print("tsfilt(" + str(i) + "): " + str(tsfilt[i]))
 
     # print("dylan_bpfilt done")
     return tsfilt, filtspec1
