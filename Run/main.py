@@ -135,22 +135,15 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
 
     tsfilt = np.real(np.fft.ifft(filtspec2, npts))
-    for i in range(100):
-        print("tsfilt(" + str(i) + "): " + str(tsfilt[i]))
+    # for i in range(100):
+        # print("tsfilt(" + str(i) + "): " + str(tsfilt[i]))
 
     # print("dylan_bpfilt done")
     return tsfilt, filtspec1
 
 
 def correl_5(x, y, lags, mode):
-    """
-    Computes
-    the
-    correlation
-    between
-    two
-    signals
-    with a maximum number of lags."""
+    """ Computes the correlation between two signals with a maximum number of lags."""
     corr = np.correlate(x, y, mode=mode)
     lags = min(lags, len(corr) - 1)
     corr = corr[len(corr) // 2 - lags:len(corr) // 2 + lags + 1]
@@ -388,8 +381,12 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
 
         # Filter the signal with adjusted cutoff frequencies
         p_filt, _ = dylan_bpfilt(poutNew, 1 / fs, flow, fhigh)
-        # print("p_filt size: " + str(len(p_filt)))
-        # print("p_filt[:10 = ", p_filt[:10])
+        print("p_filt size: " + str(len(p_filt)))
+        for i in range(10):
+            print("p_filt(" + str(i) + "): " + str(p_filt[i]))
+
+        tempPFilt = p_filt[-5:]
+        print("tempPFilt: " + str(tempPFilt))
 
         # Call the frankenfunc_testscript function
         SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = frankenfunc_testscript(p_filt, fs, timewin, fft_win,
