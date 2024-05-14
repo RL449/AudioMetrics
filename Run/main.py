@@ -133,6 +133,7 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     filtspec1 = np.abs(filtspec2[:npts // 2 + 1])
     filtspec1[1:-1] *= 2
 
+
     tsfilt = np.real(np.fft.ifft(filtspec2, npts))
     for i in range(100):
         print("tsfilt(" + str(i) + "): " + str(tsfilt[i]))
