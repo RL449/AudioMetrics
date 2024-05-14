@@ -80,7 +80,29 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     ifrHalfOne = ifr[:int(len(ifr) / 2)]
     ifrHalfTwo = ifr[int(len(ifr) / 2) + 2:]
 
-    print("ifrHalfOne", ifrHalfOne[:100])
+    ifrSize = len(ifr)
+    print("ifrSize: " + str(ifrSize))
+    ifrFinal = ifr[ifrSize - 1]
+    print("ifrFinal: " + str(ifrFinal))
+
+    print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
+
+    midValue = ifr[int(ifrSize / 2)]
+    print("MidValue: " + str(midValue))
+    ifr = np.delete(ifr, int(ifrSize / 2), None)
+    ifr = np.delete(ifr, int(ifrSize / 2), None)
+    print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
+
+    ifrLastPlusOne = ifrFinal + 1
+    print("ifrLastPlusOne: " + str(ifrLastPlusOne))
+    ifrLastPlusTwo = ifrFinal + 2
+    print("ifrLastPlusTwo: " + str(ifrLastPlusTwo))
+
+    ifr = np.insert(ifr, len(ifr), ifrLastPlusOne)
+    ifr = np.insert(ifr, len(ifr), ifrLastPlusTwo)
+
+    # print("ifr First 100: ", ifr[:100])
+    # print("ifr Final 100: ", ifr[-100:])
     # print("ifrHalfTwo", ifrHalfTwo)
 
     # print("ifr first half: " + str(ifr[:int(len(ifr) / 2) + 2]))
@@ -359,8 +381,8 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
 
         # Filter the signal with adjusted cutoff frequencies
         p_filt, _ = dylan_bpfilt(poutNew, 1 / fs, flow, fhigh)
-        print("p_filt size: " + str(len(p_filt)))
-        print("p_filt[:10 = ", p_filt[:10])
+        # print("p_filt size: " + str(len(p_filt)))
+        # print("p_filt[:10 = ", p_filt[:10])
 
         # Call the frankenfunc_testscript function
         SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = frankenfunc_testscript(p_filt, fs, timewin, fft_win,
