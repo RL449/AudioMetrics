@@ -94,9 +94,9 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
     ifrLastPlusOne = ifrFinal + 1
-    print("ifrLastPlusOne: " + str(ifrLastPlusOne))
+    # print("ifrLastPlusOne: " + str(ifrLastPlusOne))
     ifrLastPlusTwo = ifrFinal + 2
-    print("ifrLastPlusTwo: " + str(ifrLastPlusTwo))
+    # print("ifrLastPlusTwo: " + str(ifrLastPlusTwo))
 
     ifr = np.insert(ifr, len(ifr), ifrLastPlusOne)
     ifr = np.insert(ifr, len(ifr), ifrLastPlusTwo)
@@ -181,14 +181,23 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
 
     # Compute time windows
     pts_per_timewin = int(timewin * fs)
+    # print("pts_per_timewin: " + str(pts_per_timewin))
     num_timewin = len(p_filt) // pts_per_timewin
+    # print("num_timewin: " + str(num_timewin))
     trimseries = p_filt[:pts_per_timewin * num_timewin]
+    # print("trimseries size: " + str(len(trimseries)))
+    # print("trimseries: " + str(trimseries))
     timechunk_matrix = trimseries.reshape(pts_per_timewin, num_timewin)
+    # print("timechunk_matrix size: " + str(size(timechunk_matrix)))
+    # print("timechunk_matrix: " + str(timechunk_matrix))
 
     # Compute RMS and peak SPL
     rms_matrix = np.sqrt(np.mean(timechunk_matrix ** 2, axis=0))
+    print("rms_matrix: " + str(rms_matrix))
     SPLrmshold = 20 * np.log10(rms_matrix)
+    print("SPLrmshold: " + str(SPLrmshold))
     SPLpkhold = np.max(20 * np.log10(np.abs(timechunk_matrix)), axis=0)
+    print("SPLpkhold: " + str(SPLpkhold))
 
     SPLrms = SPLrmshold
     SPLpk = SPLpkhold
@@ -196,11 +205,14 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # Compute impulsivity
     kmat = np.apply_along_axis(lambda x: kurtosis(x, bias=False), 0, timechunk_matrix)
     impulsivity = kmat
+    print("impulsivity: " + str(impulsivity))
 
     # Compute periodicity
     pkcount, acorr_matrix = solo_per_gm2(p_filt, fs, timewin, avtime)
     peakcount = pkcount
+    print("peakcount: " + str(peakcount))
     autocorr = acorr_matrix
+    print("autocorr: " + str(autocorr))
 
     # Compute D-index
     dfin = solo_dissim_gm1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
@@ -382,15 +394,18 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
         # Filter the signal with adjusted cutoff frequencies
         p_filt, _ = dylan_bpfilt(poutNew, 1 / fs, flow, fhigh)
         print("p_filt size: " + str(len(p_filt)))
-        for i in range(10):
-            print("p_filt(" + str(i) + "): " + str(p_filt[i]))
+        # for i in range(10):
+            # print("p_filt(" + str(i) + "): " + str(p_filt[i]))
 
-        tempPFilt = p_filt[-5:]
-        print("tempPFilt: " + str(tempPFilt))
+        # tempPFilt = p_filt[-5:]
+        # print("tempPFilt: " + str(tempPFilt))
+
+        pts_per_timewin = timewin * fs
+        # print("pts_per_timewin: " + str(pts_per_timewin))
 
         # Call the frankenfunc_testscript function
-        SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = frankenfunc_testscript(p_filt, fs, timewin, fft_win,
-                                                                                         avtime, flow, fhigh)
+        SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim =(frankenfunc_testscript(
+            p_filt, fs, timewin, fft_win, avtime, flow, fhigh))
 
 
         SPLrms_list.append(SPLrms)
@@ -422,23 +437,22 @@ avtime = 0.1
 flow = 50
 fhigh = 300
 
-SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, rs,
-                                                                                     timewin, avtime, fft_win, arti,
-                                                                                     flow, fhigh)
+SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim =(
+    wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, rs, timewin, avtime, fft_win, arti, flow, fhigh))
 
 # Print the output shapes
-print('SPLrms shape:', SPLrms.shape)
-print("SPLrms: " + str(SPLrms))
-print('SPLpk shape:', SPLpk.shape)
-print("SPLpk: " + str(SPLpk))
-print('impulsivity shape:', impulsivity.shape)
-print("impulsivity: " + str(impulsivity))
-print('peakcount shape:', peakcount.shape)
-print("peakcount: " + str(peakcount))
-print('autocorr shape:', autocorr.shape)
-print("autocorr: " + str(autocorr))
-print('dissim shape:', dissim.shape)
-print("dissim: " + str(dissim))
+# print('SPLrms shape:', SPLrms.shape)
+print("\nSPLrms: " + str(SPLrms))
+# print('SPLpk shape:', SPLpk.shape)
+print("\nSPLpk: " + str(SPLpk))
+# print('impulsivity shape:', impulsivity.shape)
+print("\nimpulsivity: " + str(impulsivity))
+# print('peakcount shape:', peakcount.shape)
+print("\npeakcount: " + str(peakcount))
+# print('autocorr shape:', autocorr.shape)
+print("\nautocorr: " + str(autocorr))
+# print('dissim shape:', dissim.shape)
+print("\ndissim: " + str(dissim))
 
 # You can also save the output to files if needed
 np.savez('output.npz', SPLrms=SPLrms, SPLpk=SPLpk, impulsivity=impulsivity,
