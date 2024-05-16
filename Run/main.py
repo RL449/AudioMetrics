@@ -188,6 +188,7 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # print("trimseries size: " + str(len(trimseries)))
     # print("trimseries: " + str(trimseries))
     timechunk_matrix = trimseries.reshape(pts_per_timewin, num_timewin)
+    # timechunk_matrix = np.transpose(timechunk_matrix)
     print("timechunk_matrix size: " + str(timechunk_matrix.shape))
     sizeA, sizeB = timechunk_matrix.shape
     for i in range(sizeB):
