@@ -188,16 +188,18 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # print("trimseries size: " + str(len(trimseries)))
     # print("trimseries: " + str(trimseries))
     timechunk_matrix = trimseries.reshape(pts_per_timewin, num_timewin)
-    # print("timechunk_matrix size: " + str(size(timechunk_matrix)))
-    # print("timechunk_matrix: " + str(timechunk_matrix))
+    print("timechunk_matrix size: " + str(timechunk_matrix.shape))
+    sizeA, sizeB = timechunk_matrix.shape
+    for i in range(sizeB):
+        print("timechunk_matrix " + str(i) + ": " + str(timechunk_matrix[i]))
 
     # Compute RMS and peak SPL
-    rms_matrix = np.sqrt(np.mean(timechunk_matrix ** 2, axis=0))
-    print("rms_matrix: " + str(rms_matrix))
+    rms_matrix = scipy.linalg.norm(timechunk_matrix, axis=0) / np.sqrt(timechunk_matrix.shape[0])
+    # print("rms_matrix: " + str(rms_matrix))
     SPLrmshold = 20 * np.log10(rms_matrix)
-    print("SPLrmshold: " + str(SPLrmshold))
+    # print("SPLrmshold: " + str(SPLrmshold))
     SPLpkhold = np.max(20 * np.log10(np.abs(timechunk_matrix)), axis=0)
-    print("SPLpkhold: " + str(SPLpkhold))
+    # print("SPLpkhold: " + str(SPLpkhold))
 
     SPLrms = SPLrmshold
     SPLpk = SPLpkhold
