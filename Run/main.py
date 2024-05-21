@@ -1,14 +1,21 @@
 import os
 import numpy as np
 import scipy
-from numpy import size
+from numpy import size, ComplexWarning
 from scipy.io import wavfile
-from scipy.signal import hilbert, butter, sosfilt
+from scipy.signal import hilbert, butter, sosfilt, find_peaks
 from findpeaks import findpeaks
 from scipy.stats import kurtosis
 from scipy.fft import fftfreq, fftshift
 from scipy import arctan2
+import soundfile as sf
+import warnings
 
+
+# Suppress warnings
+warnings.filterwarnings("ignore", category=ComplexWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def fft(x, n = None, axis=-1):
     if n is None:
@@ -81,9 +88,9 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     ifrHalfTwo = ifr[int(len(ifr) / 2) + 2:]
 
     ifrSize = len(ifr)
-    print("ifrSize: " + str(ifrSize))
+    # print("ifrSize: " + str(ifrSize))
     ifrFinal = ifr[ifrSize - 1]
-    print("ifrFinal: " + str(ifrFinal))
+    # print("ifrFinal: " + str(ifrFinal))
 
     # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
@@ -101,7 +108,7 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     ifr = np.insert(ifr, len(ifr), ifrLastPlusOne)
     ifr = np.insert(ifr, len(ifr), ifrLastPlusTwo)
 
-    print("ifr size: " + str(len(ifr)))
+    # print("ifr size: " + str(len(ifr)))
     # print("ifr First 100: ", ifr[:100])
     # print("ifr Final 100: ", ifr[-100:])
     # print("ifrHalfTwo", ifrHalfTwo)
@@ -191,7 +198,7 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # timechunk_matrix = np.transpose(timechunk_matrix)
     print("timechunk_matrix size: " + str(timechunk_matrix.shape))
     sizeA, sizeB = timechunk_matrix.shape
-    for i in range(sizeB):
+    for i in range(1):
         print("timechunk_matrix " + str(i) + ": " + str(timechunk_matrix[i]))
 
     # Compute RMS and peak SPL
@@ -220,6 +227,7 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # Compute D-index
     dfin = solo_dissim_gm1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
     dissim = dfin
+    print("dissimilarity: " + str(dissim))
 
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
 
