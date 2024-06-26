@@ -1,23 +1,22 @@
+import math
 import os
-import numpy as np
-import scipy
-from numpy import size, ComplexWarning
-from scipy.io import wavfile
-from scipy.signal import hilbert, butter, sosfilt, find_peaks
-from findpeaks import findpeaks
-from scipy.stats import kurtosis
-from scipy.fft import fftfreq, fftshift
-from scipy import arctan2
-import soundfile as sf
 import warnings
 
+import numpy as np
+import scipy
+
+from numpy import size, ComplexWarning
+from scipy.io import wavfile
+from scipy.signal import hilbert
+from scipy.stats import kurtosis, skew
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=ComplexWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-def fft(x, n = None, axis=-1):
+
+def fft(x, n=None, axis=-1):
     if n is None:
         n = len(x)
     elif n < len(x):
@@ -30,47 +29,24 @@ def fft(x, n = None, axis=-1):
 
 def dylan_bpfilt(ts, samint, flow, fhigh):
     npts = len(ts)
-    # print("npts: " + str(npts))
     reclen = npts * samint
-    # print("reclen: " + str(reclen))
 
-    spec = fft(ts, npts)
+    spec = np.fft.fft(ts, npts)
     aspec = abs(spec)
-    pspec = arctan2(spec.imag, spec.real)
+    pspec = np.angle(spec)                             # pspec = arctan2(spec.imag, spec.real)
     freq = np.fft.fftshift(np.arange(-npts / 2, npts / 2) / reclen)
     freqFirst = freq[0]
     freq = freq[1:]
     freq = np.insert(freq, len(freq), freqFirst)
 
-    # print("freq size: " + str(len(freq)))
-    # print("freq: " + str(freq))
-
-
-    # print("Mid freq -3: " + str(freq[int(len(freq) / 2) - 3]))
-    # print("Mid freq -2: " + str(freq[int(len(freq) / 2) - 2]))
-    # print("Mid freq -1: " + str(freq[int(len(freq) / 2) - 1]))
-    # print("Mid freq 0: " + str(freq[int(len(freq) / 2)]))
-    # print("Mid freq +1: " + str(freq[int(len(freq) / 2) + 1]))
-    # print("Mid freq +2: " + str(freq[int(len(freq) / 2) + 2]))
-    # print("Mid freq +3: " + str(freq[int(len(freq) / 2) + 3]))
-
     if fhigh == 0:
         fhigh = 1 / (2 * samint)
 
     ifr = np.where(np.logical_and(np.abs(freq) >= flow, np.abs(freq) <= fhigh))[0]
-    # print("ifr size: ", len(ifr))
-
-    # for i in range(10):
-    # print("ifr " + str(i) + ": " + str(ifr[i]))
-
-    # print("ifr: " + str(ifr[:10]))
 
     ifr = ifr[2:]
 
-    # print("ifr size: ", len(ifr))
-
     ifrFirst = ifr[:int(len(ifr) / 2)]
-    # print("ifr first: " + str(ifrFirst))
 
     # Insert missing tuples in middle of ifr
     ifrMidMinus2 = ifrFirst[int(len(ifr) / 2) - 2] + 1
@@ -81,57 +57,28 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
     ifrMidPlus1 = ifr[int(len(ifr) / 2)] + 2
     ifrMidPlus2 = ifrMidPlus1 + 1
-    # print("ifr thirdIndex: " + str(ifrMidPlus1))
-    # print("ifr fourthIndex: " + str(ifrMidPlus2))
 
     ifrHalfOne = ifr[:int(len(ifr) / 2)]
     ifrHalfTwo = ifr[int(len(ifr) / 2) + 2:]
 
     ifrSize = len(ifr)
-    # print("ifrSize: " + str(ifrSize))
     ifrFinal = ifr[ifrSize - 1]
-    # print("ifrFinal: " + str(ifrFinal))
-
-    # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
     midValue = ifr[int(ifrSize / 2)]
-    # print("MidValue: " + str(midValue))
     ifr = np.delete(ifr, int(ifrSize / 2), None)
     ifr = np.delete(ifr, int(ifrSize / 2), None)
-    # print("Middle values: " + str(ifr[int(ifrSize / 2) - 2: int(ifrSize / 2) + 2]))
 
     ifrLastPlusOne = ifrFinal + 1
-    # print("ifrLastPlusOne: " + str(ifrLastPlusOne))
     ifrLastPlusTwo = ifrFinal + 2
-    # print("ifrLastPlusTwo: " + str(ifrLastPlusTwo))
 
     ifr = np.insert(ifr, len(ifr), ifrLastPlusOne)
     ifr = np.insert(ifr, len(ifr), ifrLastPlusTwo)
 
-    # print("ifr size: " + str(len(ifr)))
-    # print("ifr First 100: ", ifr[:100])
-    # print("ifr Final 100: ", ifr[-100:])
-    # print("ifrHalfTwo", ifrHalfTwo)
-
-    # print("ifr first half: " + str(ifr[:int(len(ifr) / 2) + 2]))
-    # print("ifr middle: " + str(ifr[int(len(ifr) / 2) - 4:int(len(ifr) / 2) + 4]))
-
-    # ifrSecond = ifr[int(len(ifr) / 2):]
-    # print("ifr second: " + str(ifrSecond))
-
-    # for j in range(int(len(ifr) / 2) - 5, int(len(ifr) / 2) + 5):
-    # print("ifr " + str(j) + ": " + str(ifr[j]))
-
-    # print("ifr: " + str(ifr[len(ifr) - 10:]))
-
     filtspec2 = np.zeros_like(spec, dtype=complex)
-    # print("filtspec2 size: " + str(len(filtspec2)))
     rspec = np.zeros_like(spec)
-    # print("rspec size: " + str(len(rspec)))
     ispec = np.zeros_like(spec)
-    # print("ispec size: " + str(len(ispec)))
-    rspec[ifr] = aspec[ifr] * np.cos(pspec[ifr])
 
+    rspec[ifr] = aspec[ifr] * np.cos(pspec[ifr])
     ispec[ifr] = aspec[ifr] * np.sin(pspec[ifr])
 
     filtspec2.real = rspec
@@ -140,12 +87,9 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     filtspec1 = np.abs(filtspec2[:npts // 2 + 1])
     filtspec1[1:-1] *= 2
 
-
     tsfilt = np.real(np.fft.ifft(filtspec2, npts))
-    # for i in range(100):
-        # print("tsfilt(" + str(i) + "): " + str(tsfilt[i]))
+    # print("tsfilt " + str(tsfilt))
 
-    # print("dylan_bpfilt done")
     return tsfilt, filtspec1
 
 
@@ -155,6 +99,19 @@ def correl_5(x, y, lags, mode):
     lags = min(lags, len(corr) - 1)
     corr = corr[len(corr) // 2 - lags:len(corr) // 2 + lags + 1]
     return corr / max(corr)
+
+
+def calculate_kurtosis_ft(data, axis=0, fisher=True, bias=True):
+    n = data.shape[axis]
+    mean = np.mean(data, axis=axis)
+    var = np.var(data, axis=axis, ddof=0 if bias else 1)
+    fourth_moment = np.mean((data - mean) ** 4, axis=axis)
+    kurtosis_value = fourth_moment / (var ** 2)
+
+    if fisher:
+        kurtosis_value -= 3
+
+    return kurtosis_value
 
 
 def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=50, fhigh=300):
@@ -196,10 +153,10 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     # print("trimseries: " + str(trimseries))
     timechunk_matrix = trimseries.reshape(pts_per_timewin, num_timewin)
     # timechunk_matrix = np.transpose(timechunk_matrix)
-    print("timechunk_matrix size: " + str(timechunk_matrix.shape))
+    # print("timechunk_matrix size: " + str(timechunk_matrix.shape))
     sizeA, sizeB = timechunk_matrix.shape
-    for i in range(1):
-        print("timechunk_matrix " + str(i) + ": " + str(timechunk_matrix[i]))
+    # for i in range(1):
+    # print("timechunk_matrix " + str(i) + ": " + str(timechunk_matrix[i]))
 
     # Compute RMS and peak SPL
     rms_matrix = scipy.linalg.norm(timechunk_matrix, axis=0) / np.sqrt(timechunk_matrix.shape[0])
@@ -213,16 +170,19 @@ def frankenfunc_testscript(p_filt, fs, timewin=58, fft_win=1, avtime=0.1, flow=5
     SPLpk = SPLpkhold
 
     # Compute impulsivity
-    kmat = np.apply_along_axis(lambda x: kurtosis(x, bias=False), 0, timechunk_matrix)
+    kmat = kurtosis(timechunk_matrix)
+    kurt_value = calculate_kurtosis_ft(timechunk_matrix, axis=0, fisher=True, bias=True)
+    kurt_value = kurt_value * 28
+    # print("kurt_value: " + str(kurt_value))
     impulsivity = kmat
-    print("impulsivity: " + str(impulsivity))
+    # print("impulsivity: " + str(impulsivity))
 
     # Compute periodicity
     pkcount, acorr_matrix = solo_per_gm2(p_filt, fs, timewin, avtime)
     peakcount = pkcount
-    print("peakcount: " + str(peakcount))
+    # print("peakcount: " + str(skew(peakcount, axis=0, bias=True)))
     autocorr = acorr_matrix
-    print("autocorr: " + str(autocorr))
+    # print("autocorr: " + str(autocorr))
 
     # Compute D-index
     dfin = solo_dissim_gm1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
@@ -268,22 +228,49 @@ def solo_dissim_gm1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
 
 
 def solo_per_gm2(p_filt, fs, timewin, avtime):
+    print("fs: " + str(fs))
+
+    p_av = []
+    p_avtot = []
     avwin = int(fs * avtime)
+    print("avwin: " + str(avwin))
+
     sampwin = int(fs * timewin)
+    print("sampwin: " + str(sampwin))
+
+    print("p_filt length: " + str(len(p_filt)))
     ntwin = len(p_filt) // sampwin  # Number of minutes
+    print("ntwin: " + str(ntwin))
 
     p_filt = p_filt[:sampwin * ntwin]
+    # print("\n" + "p_filt: " + str(p_filt[:10]) + "\n")
+    # quar3 = int(len(p_filt) * (19 / 20))
+    # point94339 = 72203298
+    # point943395 = 72203681
+    point94340 = 72204063
+    # print("\np_filt: " + str(p_filt[point94340:point94340 + 10]) + "\n")
     p_filt = p_filt.reshape(sampwin, ntwin)
     p_filt = p_filt ** 2
+    # print("p_filt size: " + str(p_filt.shape))
+    # print("p_filt: " + str(p_filt))
+    # print("p_filt: " + str(p_filt[100000:100010]))
+
     numavwin = p_filt.shape[0] // avwin
+    print("numavwin: " + str(numavwin))
     p_av = []
 
     for jj in range(ntwin):
         avwinmatrix = p_filt[:, jj].reshape(avwin, numavwin)
+        # print("avwinmatrix: " + str(avwinmatrix[:1]))
         p_avi = np.mean(avwinmatrix, axis=1)
         p_av.append(p_avi)
 
+    print("p_av size: " + str(size(p_av)))
+    print("p_av: " + str(p_av) + "\n")
+
     p_avtot = np.hstack(p_av)
+    # print("p_avtot size: " + str(p_avtot.size))
+    # print("p_avtot: " + str(p_avtot))
 
     if p_avtot.ndim < 2 or p_avtot.shape[1] == 0:
         print("Warning: p_avtot has fewer than 2 dimensions or no columns. Returning empty arrays.")
@@ -298,6 +285,60 @@ def solo_per_gm2(p_filt, fs, timewin, avtime):
         pkcount.append(len(pks))
 
     return pkcount, np.array(acorr).T
+
+
+def reshape_list(trimseries, rows, cols):
+    timechunk_matrix = [[0] * cols for _ in range(rows)]
+    for col in range(cols):
+        for row in range(rows):
+            timechunk_matrix[row][col] = trimseries[col * rows + row]
+    return timechunk_matrix
+
+
+def calculate_rms_matrix(timechunk_matrix):
+    num_rows = len(timechunk_matrix)
+    num_cols = len(timechunk_matrix[0])
+    rms_matrix = []
+
+    for col in range(num_cols):
+        sum_of_squares = sum(timechunk_matrix[row][col] ** 2 for row in range(num_rows))
+        mean_of_squares = sum_of_squares / num_rows
+        rms = math.sqrt(mean_of_squares)
+        rms_matrix.append(rms)
+
+    return rms_matrix
+
+
+def calculate_kurtosis(timechunk_matrix):
+    # Calculate the mean and standard deviation of each column
+    mean_values = np.mean(timechunk_matrix, axis=0)
+    std_dev = np.std(timechunk_matrix, axis=0)
+
+    # Calculate the centered data
+    centered_data = timechunk_matrix - mean_values
+
+    # Calculate the fourth moment (kurtosis)
+    fourth_moment = np.mean(centered_data ** 4, axis=0)
+
+    # Calculate kurtosis
+    kurtosis_values = fourth_moment / (std_dev ** 4)
+
+    return kurtosis_values
+
+
+def calculate_rms(array):
+    """
+    Calculate the root mean square of a given array.
+
+    Parameters:
+    array (numpy.ndarray): Input array.
+
+    Returns:
+    float: Root mean square value.
+    """
+    # Square the elements, calculate the mean, and then take the square root
+    rms = np.sqrt(np.mean(np.square(array)))
+    return rms
 
 
 def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
@@ -338,6 +379,7 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
     peakcount_list = []
     autocorr_list = []
     dissim_list = []
+    impulsivity = []
 
     for ii, filename in enumerate(file_list, start=1):
         print(f"\nProcessing file {ii}/{num_files}: {filename}")
@@ -365,6 +407,8 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
         v = x * conv_factor
         v = v.astype(np.double)  # Convert to double precision for accurate calculations
         p = v / rs
+        # print("v: " + str(v))
+        # print("p: " + str(p))
         poutLength = int((p.size / 9) + 1)
         pout = np.zeros(poutLength)
         poutNew = np.zeros(len(p))
@@ -387,25 +431,26 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
         poutNew = np.insert(poutNew, 0, 0.0)
         poutNew = np.insert(poutNew, len(poutNew) - 1, 0.0)
         # for i in range(100):
-        # # print(f"pout: {pout[i]}")
+        # print(f"pout: {pout[i]}")
         # print(f"poutNew: {poutNew[i]}")
 
         # print("p.size: " + str(p.size))
         # print("First 50 indexes of poutNew: " + str(poutNew[:50]))
         # print("Last 50 indexes of poutNew: " + str(poutNew[p.size-50:p.size + 1]))
 
-        poutNew = poutNew[:p.size+1]
+        poutNew = poutNew[:p.size + 1]
         # print("First 50 indexes of poutNew: " + str(poutNew[:50]))
         # print("Last 50 indexes of poutNew: " + str(poutNew[p.size - 50:]))
 
-
-        print("poutNew size: " + str(len(poutNew)))
-        print("p size: " + str(len(p)))
+        # print("poutNew size: " + str(len(poutNew)))
+        # print("p size: " + str(len(p)))
 
         # Filter the signal with adjusted cutoff frequencies
         p_filt, _ = dylan_bpfilt(poutNew, 1 / fs, flow, fhigh)
-        print("p_filt size: " + str(len(p_filt)))
-        # for i in range(10):
+
+        # print("p_filt " + str(p_filt))
+        print("p_filt size: " + str(p_filt.shape))
+        # for i in range(100):
             # print("p_filt(" + str(i) + "): " + str(p_filt[i]))
 
         # tempPFilt = p_filt[-5:]
@@ -414,10 +459,55 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
         pts_per_timewin = timewin * fs
         # print("pts_per_timewin: " + str(pts_per_timewin))
 
-        # Call the frankenfunc_testscript function
-        SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim =(frankenfunc_testscript(
-            p_filt, fs, timewin, fft_win, avtime, flow, fhigh))
+        num_timewin = int(len(p_filt) / pts_per_timewin)
+        # print("num_timewin: " + str(num_timewin))
 
+        trimseries = p_filt[:pts_per_timewin * num_timewin]
+        # print("trimseries size: " + str(size(trimseries)))
+        # print("trimseries: " + str(trimseries))
+
+        # start = len(trimseries) // 2 - 25
+
+        # print("trimseries pptw: " + str(trimseries[int(pts_per_timewin) - 5:int(pts_per_timewin) + 5]))
+        # print("trimseries pptw: " + str(trimseries[-10:]))
+        # print("trimseries ntw: " + str(trimseries[int(num_timewin) - 5:int(num_timewin)]))
+
+        timechunk_matrix = np.reshape(trimseries, (pts_per_timewin, num_timewin))
+        # print("tcm size: " + str(size(timechunk_matrix)))
+        # print("tcm: " + str(timechunk_matrix))
+
+        # tcm1xn = np.reshape(timechunk_matrix, -1)
+
+        # print("tcm 1xn size: " + str(size(tcm1xn)))
+        # print("tcm 1xn: " + str(tcm1xn))
+
+        # print("tcm size: " + str(size(timechunk_matrix)))
+        # print("tcm: " + str(timechunk_matrix[:5]))
+
+        # print("tcm type: " + str(type(timechunk_matrix)))
+        rms_matrix = calculate_rms_matrix(timechunk_matrix) # trimseries and timechunk_matrix inconsistently calculated
+        # print("rms_matrix: " + str(rms_matrix))
+        SPLrmshold = 20 * np.log10(rms_matrix)
+        # print("SPLrms: " + str(SPLrmshold))
+        SPLpkhold = 20 * np.log10(np.max(np.abs(timechunk_matrix), axis=0))
+        # print("SPLpk: " + str(SPLpkhold))
+
+        # SPLrms = np.column_stack((SPLrms, SPLrmshold))
+        # SPLpk = np.column_stack((SPLpk, SPLpkhold))
+
+        kmat = calculate_kurtosis(timechunk_matrix)
+        # print("kmat: " + str(kmat))
+        impulsivity = np.append(impulsivity, kmat)
+        # print("impulsivity: " + str(kmat))
+
+        # Periodicity
+        pkcount, acorr = solo_per_gm2(p_filt, fs, timewin, avtime)
+        print("pkcount: " + str(pkcount))
+        print("acorr: " + str(acorr))
+
+        # Call the frankenfunc_testscript function
+        SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = (frankenfunc_testscript(
+            p_filt, fs, timewin, fft_win, avtime, flow, fhigh))
 
         SPLrms_list.append(SPLrms)
         SPLpk_list.append(SPLpk)
@@ -432,6 +522,13 @@ def wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avti
     peakcount_out = np.array(peakcount_list)
     autocorr_out = np.hstack(autocorr_list)
     dissim_out = np.hstack(dissim_list)
+
+    # Compute periodicity
+    pkcount, acorr_matrix = solo_per_gm2(p_filt, fs, timewin, avtime)
+    peakcount = pkcount
+    print("peakcount: " + str(skew(peakcount, axis=0, bias=True)))
+    autocorr = acorr_matrix
+    print("autocorr: " + str(autocorr))
 
     return SPLrms_out, SPLpk_out, impulsivity_out, peakcount_out, autocorr_out, dissim_out
 
@@ -448,22 +545,16 @@ avtime = 0.1
 flow = 50
 fhigh = 300
 
-SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim =(
+SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = (
     wav_frankenfunction_reilly(num_bits, peak_volts, file_dir, rs, timewin, avtime, fft_win, arti, flow, fhigh))
 
 # Print the output shapes
-# print('SPLrms shape:', SPLrms.shape)
-print("\nSPLrms: " + str(SPLrms))
-# print('SPLpk shape:', SPLpk.shape)
-print("\nSPLpk: " + str(SPLpk))
-# print('impulsivity shape:', impulsivity.shape)
-print("\nimpulsivity: " + str(impulsivity))
-# print('peakcount shape:', peakcount.shape)
-print("\npeakcount: " + str(peakcount))
-# print('autocorr shape:', autocorr.shape)
-print("\nautocorr: " + str(autocorr))
-# print('dissim shape:', dissim.shape)
-print("\ndissim: " + str(dissim))
+# print("\nSPLrms: " + str(SPLrms))
+# print("\nSPLpk: " + str(SPLpk))
+# print("\nimpulsivity: " + str(impulsivity))
+# print("\npeakcount: " + str(peakcount))
+# print("\nautocorr: " + str(autocorr))
+# print("\ndissim: " + str(dissim))
 
 # You can also save the output to files if needed
 np.savez('output.npz', SPLrms=SPLrms, SPLpk=SPLpk, impulsivity=impulsivity,
