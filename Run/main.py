@@ -104,13 +104,16 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         # print("trimseries", trimseries)
 
         timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)
+        tcm_rearrange = create_2d_array_by_columns(p_filt_padded, pts_per_timewin, num_timewin)
 
         # print("p_filt_padded: " + str(p_filt_padded))
         # print("pts_per_timewin: " + str(pts_per_timewin))
         # print("num_timewin: " + str(num_timewin))
 
-        # print("timechunk_matrix shape ", timechunk_matrix.shape)
-        # print("timechunk_matrix: " + str(timechunk_matrix))
+        # print("tcm_rearrange shape ", tcm_rearrange.shape)
+        # print("tcm_rearrange: " + str(tcm_rearrange[0]))
+        # print("tcm_rearrange: " + str(tcm_rearrange[1]))
+        # print("tcm_rearrange: " + str(tcm_rearrange[-1]))
 
         # timechunk_matrix = trimseries.reshape((pts_per_timewin, num_timewin))  # Shapes trimmed series into sample per
         # time chunk rows x number of time windows
@@ -172,7 +175,10 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         max_values_per_column = np.max(l10_tcm_20, axis=0)
         # print("max_values_per_column: " + str(max_values_per_column))
 
-        SPLpkhold = np.max(20 * np.log10(np.abs(timechunk_matrix)), axis=0)
+        SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
+        # print("SPLpkhold: " + str(SPLpkhold))
+
+        # SPLpkhold = np.max(20 * np.log10(np.abs(timechunk_matrix)), axis=0)
         # SPLpkhold = np.max(l10_tcm_20, axis=0)
         # print("SPLpkhold shape: " + str(SPLpkhold.shape))
         # print("SPLpkhold: " + str(SPLpkhold) + "\n")
@@ -234,7 +240,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         # So you need to call them both when you use the function
 
         # Impulsivity
-        print("timechunk_matrix: " + str(timechunk_matrix))
+        # print("timechunk_matrix: " + str(timechunk_matrix))
 
         kmat = kurtosis_reilly(timechunk_matrix, tcmSizeB=tcmSizeB)
         # kmat = kurtosis_ignore_zeros(timechunk_matrix)
@@ -281,6 +287,22 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     end_time = time.time()
     print(f"Elapsed time: {end_time - start_time} seconds")
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
+
+
+def create_2d_array_by_columns(input_array, row, col):
+    rows = row
+    cols = col
+
+    # Initialize the 2D array with zeros
+    result = [[0 for _ in range(cols)] for _ in range(rows)]
+
+    # Fill the 2D array by columns
+    for col in range(cols):
+        for row in range(rows):
+            index = col * rows + row
+            result[row][col] = input_array[index]
+
+    return result
 
 
 def column_max_SPL(timechunk_matrix):
