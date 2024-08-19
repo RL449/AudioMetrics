@@ -279,7 +279,16 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         # print("acmedian: " + str(acmedian))
 
         # D-index
-        Dfin = f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
+        # print("tcm: " + str(tcm_rearrange))
+        # print("ppt: " + str(pts_per_timewin))
+        # print("ntw: " + str(num_timewin))
+        # print("fftw: " + str(fft_win))
+        # print("fs: " + str(fs))
+
+        Dfin = f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
+        # print("Dfin: " + str(Dfin))
+        # Dfin = calculate_dissimilarity(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs)
+
         # print("Dfin: " + str(Dfin))
         dissim.extend(Dfin)
         # print("dissim: " + str(dissim))
@@ -287,6 +296,112 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     end_time = time.time()
     print(f"Elapsed time: {end_time - start_time} seconds")
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
+
+
+def hilbert_reilly(xr, n=None):
+    if n is None:
+        x = hilbert_ml(xr)
+    else:
+        x = hilbert_ml(xr, n)
+    return x
+
+
+def hilbert_ml(xr, n=None):
+    if n is None:
+        n = []
+    if not np.isrealobj(xr):
+        print("Warning: signal:hilbert:Ignore")
+        xr = np.real(xr)
+
+    xr, nshifts = np.moveaxis(xr, 0, -1), xr.shape[0]
+    if not n:
+        n = xr.shape[0]
+
+    x = np.fft.fft(xr, n, axis=0)  # n-point FFT over columns.
+    h = np.zeros((n, xr.shape[1] if xr.ndim > 1 else 1))  # nx1 for nonempty. 0x0 for empty.
+
+    if n > 0 and 2 * (n // 2) == n:
+        # even and nonempty
+        h[0], h[n // 2] = 1, 1
+        h[1:n // 2] = 2
+    elif n > 0:
+        # odd and nonempty
+        h[0] = 1
+        h[1:(n + 1) // 2] = 2
+
+    x = np.fft.ifft(x * h[:, np.newaxis], axis=0)
+    x = np.moveaxis(x, -1, 0)
+
+    return x
+
+
+def hilbert_cg(xr, n=None):
+    if n is not None:
+        pass  # Placeholder for code generation specifics
+
+    if not np.isrealobj(xr):
+        print("Warning: signal:hilbert:Ignore")
+        if n is not None:
+            return hilbert_cg(np.real(xr), n)
+        else:
+            return hilbert_cg(np.real(xr))
+
+    dim = hilbert_non_singleton_dim(xr)
+    if n is None:
+        x = np.empty_like(xr, dtype=np.complex_)
+        if xr.ndim == 1:
+            x[:] = hilbert_columnwise(xr)
+        elif dim == 0:
+            x[:] = hilbert_columnwise(xr)
+        else:
+            ncols = np.prod(xr.shape[dim + 1:])
+            xrshifted = xr.reshape(xr.shape[dim], ncols)
+            x[:] = hilbert_columnwise(xrshifted)
+    else:
+        sz = list(xr.shape)
+        sz[dim] = n
+        x = np.zeros(sz, dtype=np.complex_)
+        if xr.ndim == 1:
+            x[:] = hilbert_columnwise(xr, n)
+        elif dim == 0:
+            x[:] = hilbert_columnwise(xr, n)
+        else:
+            ncols = np.prod(xr.shape[dim + 1:])
+            xrshifted = xr.reshape(xr.shape[dim], ncols)
+            x[:] = hilbert_columnwise(xrshifted, n)
+
+    return x
+
+
+def hilbert_columnwise(xr, n=None):
+    if n is not None:
+        x = np.fft.fft(xr, n, axis=0)  # n-point FFT over columns.
+    else:
+        n = xr.shape[0]
+        x = np.fft.fft(xr, axis=0)  # n-point FFT over columns.
+
+    nrows = max(0, n)
+    ncols = x.shape[1]
+    halfn = nrows // 2
+    last_index_to_double = halfn + 1 if nrows % 2 else halfn
+    first_index_to_zero = halfn + 2
+
+    for j in range(ncols):
+        for i in range(1, last_index_to_double):
+            x[i, j] *= 2
+        for i in range(first_index_to_zero, nrows):
+            x[i, j] = 0
+
+    x = np.fft.ifft(x, axis=0)
+    return x
+
+
+def hilbert_non_singleton_dim(x):
+    # Like MATLAB's first nonsingleton dim except for scalars returns 1 instead of 2.
+    for k in range(x.ndim):
+        if x.shape[k] != 1:
+            return k
+    return 0
 
 
 def create_2d_array_by_columns(input_array, row, col):
@@ -1026,50 +1141,132 @@ def remove_zeros(matrix):
     return filtered_matrix
 
 
-def f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs):
+def f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange):
     # print("timechunk_matrix: " + str(timechunk_matrix))
     # print("pts_per_timewin: " + str(pts_per_timewin))
     # print("num_timewin: " + str(num_timewin))
     # print("fft_win: " + str(fft_win))
     # print("fs: " + str(fs))
 
+    tcm_rearrange = np.array(tcm_rearrange)
+
     pts_per_fft = int(fft_win * fs)  # Calc size fft window
+    # print("pts_per_fft " + str(pts_per_fft))
     numfftwin = int(np.floor(pts_per_timewin / pts_per_fft))  # Number of fft windows
+    # print("numfftwin " + str(numfftwin))
 
     Dfin = []
     D = []
 
     for kk in range(num_timewin - 1):
-        analytic1 = hilbert(timechunk_matrix[:, kk])
-        analytic2 = hilbert(timechunk_matrix[:, kk + 1])
+        analytic1 = hilbert(tcm_rearrange[:, kk], axis=-1)
+        # print("analytic1 " + str(analytic1))
+        analytic2 = hilbert(tcm_rearrange[:, kk + 1])
+        # print("analytic2 " + str(analytic2) + "\n")
 
         at1 = abs(analytic1) / np.sum(abs(analytic1))
+        # print("at1: " + str(at1))
         at2 = abs(analytic2) / np.sum(abs(analytic2))
+        # print("at2: " + str(at2) + "\n")
 
         Dt = np.sum(abs(at1 - at2)) / 2
+        # print("Dt: " + str(Dt))
 
-        s3a = timechunk_matrix[:, kk]
+        s3a = tcm_rearrange[:, kk]
         s3a = s3a[:int(pts_per_fft * numfftwin)]
-        s3a = s3a.reshape((pts_per_fft, numfftwin))
-        ga = abs(fft(s3a, axis=0)) / s3a.shape[0]
-        sfa = np.mean(ga, axis=1)
-        Sfa = abs(sfa) / np.sum(abs(sfa))
+        # print("s3a shape: " + str(s3a.shape))
+        # s3a = s3a.reshape((pts_per_fft, numfftwin))
+        s3a = create_2d_array_by_columns(s3a, pts_per_fft, numfftwin)
 
-        s3b = timechunk_matrix[:, kk + 1]
+        # print("s3a is " + str(s3a[0]))
+        # print("s3a is " + str(s3a[1]))
+        # print("s3a is " + str(s3a[-1]))
+
+        # print("abs 0 fft: " + str(np.abs(np.fft.fft(s3a[0]))))
+        # print("abs end fft: " + str(np.abs(np.fft.fft(s3a[-1]))))
+        # print("s3a shape: " + str(shape(s3a[0])))
+        # print("len(s3a): " + str(len(s3a)))
+        # print("s3a.shape: " + str(s3a.shape))
+
+        # ga = np.abs(np.fft.fft(s3a)) / np.shape(s3a[0])
+        # print("fft:")
+        # print(np.fft.fft(s3a))
+        # print("fft abs:")
+        # print(np.abs(np.fft.fft(s3a)))
+        # print(len(s3a))
+        # print("\n")
+
+        s3a = np.array(s3a)
+        ga = np.abs(np.fft.fft(s3a, axis=0)) / s3a.shape[0]
+        # print("ga shape: " + str(shape(ga)))
+
+        # print("ga: " + str(ga))
+        # print("ga1: " + str(ga[0]))
+        # print("gaend: " + str(ga[-1]))
+        sfa = np.mean(ga, axis=1)
+        # print("sfa: " + str(sfa[:10]))
+        Sfa = abs(sfa) / np.sum(abs(sfa))
+        # print("Sfa: " + str(Sfa[:10]))
+
+        s3b = tcm_rearrange[:, kk + 1]
+        # print("s3b: " + str(s3b))
         s3b = s3b[:int(pts_per_fft * numfftwin)]
-        s3b = s3b.reshape(pts_per_fft, numfftwin)
-        gb = abs(fft(s3b)) / s3b.shape[0]
+        # print("s3b: " + str(s3b))
+        # s3b = s3b.reshape(pts_per_fft, numfftwin)
+        s3b = np.array(s3b)
+        s3b = create_2d_array_by_columns(s3b, pts_per_fft, numfftwin)
+        # print("s3b shape " + str(shape(s3b)))
+        # print("s3b: " + str(s3b[0]))
+        # print("s3b: " + str(s3b[1]))
+        # print("s3b: " + str(s3b[-1]))
+
+        s3b = np.array(s3b)
+        gb = np.abs(np.fft.fft(s3b, axis=0)) / s3b.shape[0]
+        # print("gb shape: " + str(shape(gb)))
+        # print("gb0: " + str(gb[0]))
+        # print("gb1: " + str(gb[1]))
+        # print("gb-1: " + str(gb[-1]))
         sfb = np.mean(gb, axis=1)
+        # print("sfb: " + str(sfb[:10]))
         Sfb = abs(sfb) / np.sum(abs(sfb))
+        # print("Sfb: " + str(Sfb[:10]))
 
         Df = np.sum(abs(Sfb - Sfa)) / 2
+        # print("Df: " + str(Df))
 
         Di = Dt * Df
+        # print("Di: " + str(Di))
 
         D.append(Di)
+        # print("D: " + str(D))
 
     Dfin = np.array(D)
     return Dfin
+
+
+def calculate_dissimilarity(timechunk_matrix, parts_per_time_window, number_of_time_windows,
+                            fast_fourier_transform_window, sample_rate):
+    # Initialize the dissimilarity matrix
+    dissimilarity = np.zeros(number_of_time_windows - 1)
+
+    # Loop over each time window
+    for i in range(1, number_of_time_windows):
+        # Extract the time chunks for consecutive windows
+        current_chunk = timechunk_matrix[:, (i - 1) * parts_per_time_window: i * parts_per_time_window]
+        next_chunk = timechunk_matrix[:, i * parts_per_time_window: (i + 1) * parts_per_time_window]
+
+        # Apply FFT to the time chunks
+        current_fft = np.abs(fft(current_chunk, n=fast_fourier_transform_window, axis=1))
+        next_fft = np.abs(fft(next_chunk, n=fast_fourier_transform_window, axis=1))
+
+        # Calculate the mean magnitude across all parts in each time window
+        current_magnitude = np.mean(current_fft, axis=0)
+        next_magnitude = np.mean(next_fft, axis=0)
+
+        # Calculate dissimilarity between the consecutive time windows (e.g., Euclidean distance)
+        dissimilarity[i - 1] = np.linalg.norm(current_magnitude - next_magnitude)
+
+    return dissimilarity
 
 
 def correl_5(ts1, ts2, lags, offset):
@@ -1122,9 +1319,9 @@ SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_
                                                                                        arti, flow, fhigh)
 # scipy.io.savemat(r'C:\Users\rlessard\Desktop\SoundscapeCodeDesktop\DataOutput\240525225624_240531105601.mat', {'SPLrms': SPLrms, 'SPLpk': SPLpk, 'impulsivity': impulsivity, 'peakcount': peakcount, 'autocorr': autocorr, 'dissim': dissim})
 
-print("\nSPLrms:\n" + str(SPLrms))
-print("\nSPLpk:\n" + str(SPLpk))
-print("\nImpulsivity:\n" + str(impulsivity))
-print("\nPeakCount:\n" + str(peakcount))
 print("\nAutocorr:\n" + str(autocorr))
 print("\nDissim:\n" + str(dissim))
+print("\nImpulsivity:\n" + str(impulsivity))
+print("\nPeakCount:\n" + str(peakcount))
+print("\nSPLpk:\n" + str(SPLpk))
+print("\nSPLrms:\n" + str(SPLrms))
