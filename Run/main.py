@@ -242,13 +242,17 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         # Impulsivity
         # print("timechunk_matrix: " + str(timechunk_matrix))
 
-        kmat = kurtosis_reilly(timechunk_matrix, tcmSizeB=tcmSizeB)
+        # kmat = kurtosis_reilly(timechunk_matrix, tcmSizeB=tcmSizeB)
         # kmat = kurtosis_ignore_zeros(timechunk_matrix)
-        # kmat = kurtosis(timechunk_matrix)
 
-        print("kmat: " + str(kmat))
+        # print("tcmr: " + str(tcm_rearrange))
+
+        tcm_rearrange = np.array(tcm_rearrange)
+        kmat = kurtosis_reilly(tcm_rearrange)
+
+        # print("kmat: " + str(kmat))
         impulsivity.extend(kmat)
-        print("impulsivity: " + str(impulsivity))
+        # print("impulsivity: " + str(impulsivity))
 
 
         # print("\np_filt_padded: " + str(p_filt_padded[-10:]))
