@@ -32,7 +32,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     start_time = time.time()
     for ii in range(num_files):  # ii is an index value - completes 1 loop for every file until all files are analyzed
         print(f"\n{ii + 1} out of {num_files}")  # lists ii as a variable to tell you every time it completes a loop
-        filename = os.path.join(r'C:\Users\rlessard\Desktop\5593 organized\240406165958_240413225912\output_10min',
+        filename = os.path.join(r'C:\Users\rlessard\Desktop\runThis',
                                 file_dir[ii])
         rs = (10 ** (RS / 20))
         max_count = 2 ** num_bits
@@ -299,6 +299,12 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
     end_time = time.time()
     print(f"Elapsed time: {end_time - start_time} seconds")
+    # Reshape metrics (One row per recording)
+    dissim = np.reshape(dissim, (num_files, int(len(dissim) / num_files)))
+    impulsivity = np.reshape(impulsivity, (num_files, int(len(impulsivity) / num_files)))
+    peakcount = np.reshape(peakcount, (num_files, int(len(peakcount) / num_files)))
+    SPLpk = np.reshape(SPLpk, (num_files, int(len(SPLpk) / num_files)))
+    SPLrms = np.reshape(SPLrms, (num_files, int(len(SPLrms) / num_files)))
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
 
 
@@ -511,7 +517,7 @@ def kurtosis_reilly(x, flag=1, dim=None, tcmSizeB=0):
     # [x0_dim1, x0_dim2] = x0.shape
     # print("x0 shape: " + str(x0_dim1) + ", " + str(x0_dim2))
     s2 = nanmean(x0**2, axis=dim)  # biased variance estimator
-    print("s2: " + str(s2))
+    # print("s2: " + str(s2))
     m4 = np.nanmean(np.power(x0, 4), axis=0)
     # print("m4: " + str(m4[:2]))
 
@@ -1304,7 +1310,7 @@ def correl_5(ts1, ts2, lags, offset):
     return P, nlags
 
 
-file_dir = os.listdir(r'C:\Users\rlessard\Desktop\5593 organized\240406165958_240413225912\output_10min')
+file_dir = os.listdir(r'C:\Users\rlessard\Desktop\runThis')
 num_bits = 16
 RS = -178.3  # BE SURE TO CHANGE FOR EACH HYDROPHONE
 # Sensitivity is based on hydrophone, not recorder
