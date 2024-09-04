@@ -1,16 +1,18 @@
 import math
 import numpy as np
 import os
-
+import warnings
 import scipy
-from numpy import size, zeros, transpose, shape, mean
+from numpy import shape, mean
 from scipy.io import wavfile
 from scipy.signal import resample
-import time
 from scipy.signal import find_peaks
 from scipy.signal import hilbert
-from numpy.fft import fft
 
+warnings.filterwarnings("ignore") # Ignore warning messages
+
+input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/output_10min" # Path containing .wav files
+output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.mat" # Path to store .mat file
 
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
     num_files = len(file_dir)
@@ -23,16 +25,12 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     autocorr = None
     dissim = []
 
-    start_time = time.time()
     for ii in range(num_files):  # ii is an index value - completes 1 loop for every file until all files are analyzed
-        print(f"\n{ii + 1} out of {num_files}")  # lists ii as a variable to tell you every time it completes a loop
-        filename = os.path.join(r'D:\5593\5593_0601_0609_clipped', file_dir[ii])
+        filename = os.path.join(input_dir, file_dir[ii])
         rs = (10 ** (RS / 20))
         max_count = 2 ** num_bits
         conv_factor = peak_volts / max_count
         fs, x = wavfile.read(filename)
-        # print("fs: " + str(fs))
-        # print("x: " + str(x))
         if fs == 576000:
             x = resample(x, len(x) // 4)
             fs = fs // 4
@@ -117,8 +115,6 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
         dissim.extend(Dfin)
 
-    end_time = time.time()
-    print(f"Elapsed time: {end_time - start_time} seconds")
     # Reshape metrics (One row per recording)
     dissim = np.reshape(dissim, (num_files, int(len(dissim) / num_files)))
     impulsivity = np.reshape(impulsivity, (num_files, int(len(impulsivity) / num_files)))
@@ -170,8 +166,6 @@ def kurtosis_reilly(x, flag=1, dim=None, tcmSizeB=0):
         raise ValueError("Bad flag value: flag should be 0 or 1.")
 
     if dim is None:
-        # print("nargin < 3 or isempty(dim)")
-
         # Handle the special case where x is empty.
         if np.array_equal(x, np.array([])):
             print("x is empty")
@@ -179,7 +173,6 @@ def kurtosis_reilly(x, flag=1, dim=None, tcmSizeB=0):
 
         # Determine the dimension along which np.nanmean will work.
         dim = next((i for i, s in enumerate(x.shape) if s != 1), None)
-        # print("dim: " + str(dim))
 
         if dim is None:
             dim = 0
@@ -258,16 +251,11 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
 
 def f_solo_per_GM2(p_filt, fs, timewin, avtime):
-    print("fs is " + str(fs))
     p_av = []
     p_avtot = []
     avwin = int(fs * avtime)
-    print("avwin is " + str(avwin))
     sampwin = int(fs * timewin)
-    print("sampwin is " + str(sampwin))
-    print("Length of p_filt " + str(len(p_filt)))
     ntwin = len(p_filt) // sampwin  # Number of minutes
-    print("ntwin is " + str(ntwin))
     p_filt = p_filt[:sampwin * ntwin]
 
     p_filt = distribute_array(p_filt, ntwin)
@@ -423,7 +411,7 @@ def correl_5(ts1, ts2, lags, offset):
     return P, nlags
 
 
-file_dir = os.listdir(r'D:\5593\5593_0601_0609_clipped')
+file_dir = os.listdir(input_dir)
 num_bits = 16
 RS = -178.3  # BE SURE TO CHANGE FOR EACH HYDROPHONE
 # Sensitivity is based on hydrophone, not recorder
@@ -441,6 +429,13 @@ SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_
                                                                                        RS, timewin, avtime, fft_win,
                                                                                        arti, flow, fhigh)
 
+# Change dimensions for mxn to nxm
+SPLrms = [[SPLrms[j][i] for j in range(len(SPLrms))] for i in range(len(SPLrms[0]))]
+SPLpk = [[SPLpk[j][i] for j in range(len(SPLpk))] for i in range(len(SPLpk[0]))]
+impulsivity = [[impulsivity[j][i] for j in range(len(impulsivity))] for i in range(len(impulsivity[0]))]
+peakcount = [[peakcount[j][i] for j in range(len(peakcount))] for i in range(len(peakcount[0]))]
+dissim = [[dissim[j][i] for j in range(len(dissim))] for i in range(len(dissim[0]))]
+
 data = {
 'SPLrms': SPLrms,
     'SPLpk': SPLpk,
@@ -449,11 +444,4 @@ data = {
     'autocorr': autocorr,
     'dissim': dissim
 }
-scipy.io.savemat(r'C:\Users\rlessard\Desktop\SoundscapeCodeDesktop\DataOutput\192khz\5593_0601_0609_python.mat', data)
-
-print("\nAutocorr:\n" + str(autocorr))
-print("\nDissim:\n" + str(dissim))
-print("\nImpulsivity:\n" + str(impulsivity))
-print("\nPeakCount:\n" + str(peakcount))
-print("\nSPLpk:\n" + str(SPLpk))
-print("\nSPLrms:\n" + str(SPLrms))
+scipy.io.savemat(output_dir, data)
