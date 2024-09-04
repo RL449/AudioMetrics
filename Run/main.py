@@ -3,6 +3,7 @@ import numpy as np
 import os
 import warnings
 import scipy
+import json
 from numpy import shape, mean
 from scipy.io import wavfile
 from scipy.signal import resample
@@ -12,7 +13,7 @@ from scipy.signal import hilbert
 warnings.filterwarnings("ignore") # Ignore warning messages
 
 input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/output_10min" # Path containing .wav files
-output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.mat" # Path to store .mat file
+output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.json" # Path to store .mat file
 
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
     num_files = len(file_dir)
@@ -437,11 +438,14 @@ peakcount = [[peakcount[j][i] for j in range(len(peakcount))] for i in range(len
 dissim = [[dissim[j][i] for j in range(len(dissim))] for i in range(len(dissim[0]))]
 
 data = {
-'SPLrms': SPLrms,
+    'SPLrms': SPLrms,
     'SPLpk': SPLpk,
     'impulsivity': impulsivity,
     'peakcount': peakcount,
-    'autocorr': autocorr,
+    'autocorr': autocorr.tolist(),  # Convert numpy array to list
     'dissim': dissim
 }
-scipy.io.savemat(output_dir, data)
+
+# Save as JSON
+with open(output_dir, 'w') as json_file:
+    json.dump(data, json_file, indent=4)
