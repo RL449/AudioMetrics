@@ -16,6 +16,34 @@ input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/
 output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.json" # Path to store .mat file
 
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
+    """
+    f_WAV_frankenfunction: accepts acoustic data, hydrophone features, and processing preferences as inputs then outputs
+    calibrated soundscape metrics
+    Inputs:
+    num_bits = bit rate of hydrophone
+    peak_volts = voltage of the recorder, peak to peak
+    file_dir = the directory of files intended for processing
+    RS = hydrophone sensitivity
+    timewin = size of time windows in seconds for calculation of soundscape metrics
+    avtime = averaging time duration in seconds for autocorrelation measurements
+    fft_win = size of time window in minutes over which fft is performed
+    arti = enter 1 if there are artifacts such as calibration tones at the
+    begginings of recordings
+    flow = lower frequency cutoff
+    fhigh = upper frequency cutoff
+
+    Outputs:
+    SPLrms = matrix of root mean square sound pressure level, each column is a sound file, each row is 1 min of data
+    SPLpk = matrix of peak SPL (the highest SPL in a sample), each column is a sound file, each row is 1 min of data
+    impulsivity = uses kurtosis function to measure impulsive sounds
+    peakcount = a count of the # of times that the autocorrelation threshold is exceeded
+    autocorr = a matrix of autocorrelation calculations, each column is 1 min of data,
+    each row is the autocorrelation value calculated at .1 sec time
+    dissim = a matrix of the amount of uniformity between each 1 min of data
+    compared to the following minute of data, should have n-1 rows where n is
+    the number of minutes of data
+    """
+
     num_files = len(file_dir)
     p = []  # Empty variable
     pout = []
@@ -428,12 +456,11 @@ arti = 1  # Make 1 if calibration tone present
 timewin = 60  # Length of time window in seconds for analysis bins
 fft_win = 1  # Length of fft window in minutes
 avtime = 0.1
-flow = 50
-fhigh = 300
+flow = 50 # Low frequency
+fhigh = 300 # High frequency
 
-SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir,
-                                                                                       RS, timewin, avtime, fft_win,
-                                                                                       arti, flow, fhigh)
+SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_reilly(
+    num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh)
 
 # Change dimensions for mxn to nxm
 SPLrms = reshape_vertical(SPLrms)
