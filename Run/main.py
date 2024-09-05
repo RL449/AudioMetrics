@@ -412,6 +412,11 @@ def correl_5(ts1, ts2, lags, offset):
     return P, nlags
 
 
+def reshape_vertical(matrix):
+    matrix = [[matrix[j][i] for j in range(len(matrix))] for i in range(len(matrix[0]))]
+    return matrix
+
+
 file_dir = os.listdir(input_dir)
 num_bits = 16
 RS = -178.3  # BE SURE TO CHANGE FOR EACH HYDROPHONE
@@ -431,11 +436,11 @@ SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_
                                                                                        arti, flow, fhigh)
 
 # Change dimensions for mxn to nxm
-SPLrms = [[SPLrms[j][i] for j in range(len(SPLrms))] for i in range(len(SPLrms[0]))]
-SPLpk = [[SPLpk[j][i] for j in range(len(SPLpk))] for i in range(len(SPLpk[0]))]
-impulsivity = [[impulsivity[j][i] for j in range(len(impulsivity))] for i in range(len(impulsivity[0]))]
-peakcount = [[peakcount[j][i] for j in range(len(peakcount))] for i in range(len(peakcount[0]))]
-dissim = [[dissim[j][i] for j in range(len(dissim))] for i in range(len(dissim[0]))]
+SPLrms = reshape_vertical(SPLrms)
+SPLpk = reshape_vertical(SPLpk)
+impulsivity = reshape_vertical(impulsivity)
+peakcount = reshape_vertical(peakcount)
+dissim = reshape_vertical(dissim)
 
 data = {
     'SPLrms': SPLrms,
