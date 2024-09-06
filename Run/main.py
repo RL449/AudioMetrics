@@ -157,6 +157,9 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
 
 def create_2d_array_by_columns(input_array, row, col):
+    """
+    Create matrix with data being inserted by column, rather than by row.
+    """
     rows = row
     cols = col
 
@@ -173,7 +176,10 @@ def create_2d_array_by_columns(input_array, row, col):
 
 
 def column_max_SPL(timechunk_matrix):
-    # Get the number of columns (assuming all rows have the same length)
+    """
+    Get the number of columns (assuming all rows have the same length)
+    Returns the peak in each column
+    """
     num_columns = len(timechunk_matrix[0])
 
     SPLpkhold = []
@@ -184,14 +190,13 @@ def column_max_SPL(timechunk_matrix):
             spl = 20 * math.log10(max_value)
             SPLpkhold.append(spl)
         else:
-            SPLpkhold.append(float('-inf'))  # Or any other value to represent undefined SPL
+            SPLpkhold.append(float('-inf'))  # Used to represent undefined SPL value
 
     return SPLpkhold
 
 
-
 def kurtosis_reilly(x, flag=1, dim=None):
-    '''
+    """
     Rewritten from MATLAB
     K = KURTOSIS(X) returns the sample kurtosis of the values in X.
     For a vector input, K is the fourth central moment of X, divided by fourth power of its standard deviation.
@@ -200,7 +205,7 @@ def kurtosis_reilly(x, flag=1, dim=None):
 
     KURTOSIS(X,0) adjusts the kurtosis for bias.
     KURTOSIS(X,1) is the same as KURTOSIS(X), and does not adjust the bias.
-    '''
+    """
     flag = 1
 
     # Determine the dimension if not provided
@@ -221,12 +226,10 @@ def kurtosis_reilly(x, flag=1, dim=None):
 
     x0 = x - np.nanmean(x, axis=dim, keepdims=True)
 
-    [x0_dim1, x0_dim2] = x0.shape
-
     s2 = nanmean(x0**2, axis=dim)  # biased variance estimator
     m4 = np.nanmean(np.power(x0, 4), axis=0)
 
-    k = m4 / np.square(s2)
+    k = m4 / np.square(s2)  # Determine element-wise square
 
     # Bias correction
     if flag == 0:
@@ -238,7 +241,9 @@ def kurtosis_reilly(x, flag=1, dim=None):
 
 
 def nanmean(arr, axis=None):
-    # Convert the input to a NumPy array if it isn't one already
+    """
+    Convert the input to a numpy array if it isn't already
+    """
     arr = np.array(arr)
 
     # Create a mask to ignore NaN, 0, and empty values
@@ -274,13 +279,26 @@ def rms_reilly(x, dim=None):
     return vertical_averages_sqrt
 
 
-def dylan_bpfilt(ts, samint, flow, fhigh):
+def bpfilt_initial_values(ts, samint):
+    """
+    Define initial values for dylan_bpfilt
+    """
     npts = len(ts)
     reclen = npts * samint
     spec = np.fft.fft(ts, npts)
     aspec = np.abs(spec)
     pspec = np.angle(spec)
     freq = np.fft.fftshift(np.arange(-npts / 2, npts / 2) / reclen)
+
+    return npts, spec, aspec, pspec, freq
+
+
+def dylan_bpfilt(ts, samint, flow, fhigh):
+    """
+    Create a bypass filter.
+    Uses maximum and minimum frequencies for metric calculations.
+    """
+    npts, spec, aspec, pspec, freq = bpfilt_initial_values(ts, samint)
 
     if fhigh == 0:
         fhigh = 1 / (2 * samint)
