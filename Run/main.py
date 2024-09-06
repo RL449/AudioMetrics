@@ -2,7 +2,6 @@ import math
 import numpy as np
 import os
 import warnings
-import scipy
 import json
 from numpy import shape, mean
 from scipy.io import wavfile
@@ -60,6 +59,8 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         max_count = 2 ** num_bits
         conv_factor = peak_volts / max_count
         fs, x = wavfile.read(filename)
+
+        # Downsample if sample rate is too high
         if fs == 576000:
             x = resample(x, len(x) // 4)
             fs = fs // 4
@@ -75,14 +76,14 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
             fs = fs / 3.5555555555555555555
 
         if num_bits == 24:
-            x = x >> 8  # Bit shift
+            x = x >> 8  # Bit shift; accounts for audioread casting of 24 bit to 32 bit (zeroes behind)
 
         v = x.astype(float) * conv_factor
 
-        p = v / rs
+        p = v / rs  # Voltage to pressure
         if arti == 1:
-            p = p[6 * fs - 1:]  # Different indexing than MATLAB (Must include " - 1")
-        pout.extend(p)
+            p = p[6 * fs - 1:] # trims first 4 sec of recording
+        pout.extend(p)  # Make this so the new p gets added at end of original p
 
         middle = len(pout) // 2
         p = []
@@ -90,23 +91,19 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         pout = []
         pts_per_timewin = int(timewin * fs)  # Number of samples per time window - set window * 576 kHz sample rate
 
-        num_timewin = math.floor(len(p_filt) / pts_per_timewin) + 1
+        num_timewin = math.floor(len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
 
         # Pad the signal to accomodate the extra time window
         padding_length = num_timewin * pts_per_timewin - len(p_filt)
         p_filt_padded = np.concatenate((p_filt, np.zeros(padding_length)))
-
         timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)
+
         tcm_rearrange = create_2d_array_by_columns(p_filt_padded, pts_per_timewin, num_timewin)
-
         [tcmSizeA, tcmSizeB] = timechunk_matrix.shape
-
         rms_matrix = rms_reilly(timechunk_matrix, 0)
 
         SPLrmshold = 20 * np.log10(rms_matrix)  # Log transforms the rms pressure
-
-        SPLpkhold = column_max_SPL(timechunk_matrix)
-
+        SPLpkhold = column_max_SPL(timechunk_matrix)  # Identifies the peak in rms pressure
         tcm_abs = abs(timechunk_matrix)
         l10_tcm = np.log10(tcm_abs)
         l10_tcm_20 = 20 * l10_tcm
@@ -140,7 +137,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         acmedian = np.median(autocorr, axis=0)
 
         # D-index
-        Dfin = f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
+        Dfin = f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
 
         dissim.extend(Dfin)
 
@@ -187,7 +184,17 @@ def column_max_SPL(timechunk_matrix):
 
 
 
-def kurtosis_reilly(x, flag=1, dim=None, tcmSizeB=0):
+def kurtosis_reilly(x, flag=1, dim=None):
+    '''
+    Rewritten from MATLAB
+    K = KURTOSIS(X) returns the sample kurtosis of the values in X.
+    For a vector input, K is the fourth central moment of X, divided by fourth power of its standard deviation.
+    For a matrix input, K is a row vector containing the sample kurtosis of each column of X.
+    For N-D arrays, KURTOSIS operates along the first non-singleton dimension
+
+    KURTOSIS(X,0) adjusts the kurtosis for bias.
+    KURTOSIS(X,1) is the same as KURTOSIS(X), and does not adjust the bias.
+    '''
     flag = 1
 
     # Determine the dimension if not provided
@@ -237,6 +244,14 @@ def nanmean(arr, axis=None):
 
 
 def rms_reilly(x, dim=None):
+    '''
+    Rewritten from MATLAB
+    For vectors, RMS(X) is the root mean square value in X.
+    For matrices, RMS(X) is a row vector containing the RMS value from each column.
+
+    Y = RMS(X,DIM) operates along the dimension DIM
+    '''
+
     global vertical_averages_sqrt
     if np.isrealobj(x):
         if dim is not None:
@@ -280,6 +295,9 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
 
 def f_solo_per_GM2(p_filt, fs, timewin, avtime):
+    '''
+    Calculates peakcount and autocorrelation
+    '''
     p_av = []
     p_avtot = []
     avwin = int(fs * avtime)
@@ -299,7 +317,6 @@ def f_solo_per_GM2(p_filt, fs, timewin, avtime):
         avwinmatrix = distribute_array_2d(p_filt[:, jj], numavwin, avwin)
 
         p_avi = np.mean(avwinmatrix, axis=0)
-
         p_av.append(p_avi)
 
     p_av_dim1, p_av_dim2 = np.shape(p_av)
@@ -323,7 +340,7 @@ def f_solo_per_GM2(p_filt, fs, timewin, avtime):
 
 
 def distribute_array(arr_1d, dim):
-    # Calculate the number of elements per column (10% of the total)
+    # Calculate the number of elements per column
     elements_per_column = len(arr_1d) // dim
 
     # Create an empty 2D array with 10 columns
@@ -362,8 +379,11 @@ def distribute_array_2d(arr_1d, num_columns, num_rows = None):
     return arr_2d
 
 
-def f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange):
-    tcm_rearrange = np.array(tcm_rearrange)
+def f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange):
+    '''
+    Calculates dissimilarity
+    '''
+    tcm_rearrange = np.array(tcm_rearrange)  # Uses numpy to perform mathematical operations
 
     pts_per_fft = int(fft_win * fs)  # Calc size fft window
     numfftwin = int(np.floor(pts_per_timewin / pts_per_fft))  # Number of fft windows
@@ -410,6 +430,9 @@ def f_solo_dissim_GM1(timechunk_matrix, pts_per_timewin, num_timewin, fft_win, f
 
 
 def correl_5(ts1, ts2, lags, offset):
+    '''
+    Used to calculate autocorrelation
+    '''
     P = np.zeros(lags + 1)
     nlags = np.arange(0, lags + 1)
 
