@@ -153,6 +153,9 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     peakcount = np.reshape(peakcount, (num_files, int(len(peakcount) / num_files)))
     SPLpk = np.reshape(SPLpk, (num_files, int(len(SPLpk) / num_files)))
     SPLrms = np.reshape(SPLrms, (num_files, int(len(SPLrms) / num_files)))
+
+    autocorr = np.round(autocorr, 15)
+
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
 
 
@@ -504,25 +507,26 @@ avtime = 0.1
 flow = 50 # Low frequency
 fhigh = 300 # High frequency
 
-SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_reilly(
-    num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh)
+if __name__ == '__main__':
+    SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_reilly(
+        num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh)
 
-# Change dimensions for mxn to nxm
-SPLrms = reshape_vertical(SPLrms)
-SPLpk = reshape_vertical(SPLpk)
-impulsivity = reshape_vertical(impulsivity)
-peakcount = reshape_vertical(peakcount)
-dissim = reshape_vertical(dissim)
+    # Change dimensions for mxn to nxm
+    SPLrms = reshape_vertical(SPLrms)
+    SPLpk = reshape_vertical(SPLpk)
+    impulsivity = reshape_vertical(impulsivity)
+    peakcount = reshape_vertical(peakcount)
+    dissim = reshape_vertical(dissim)
 
-data = {
-    'SPLrms': SPLrms,
-    'SPLpk': SPLpk,
-    'impulsivity': impulsivity,
-    'peakcount': peakcount,
-    'autocorr': autocorr.tolist(),  # Convert numpy array to list
-    'dissim': dissim
-}
+    data = {
+        'SPLrms': SPLrms,
+        'SPLpk': SPLpk,
+        'impulsivity': impulsivity,
+        'peakcount': peakcount,
+        'autocorr': autocorr.tolist(),  # Convert numpy array to list
+        'dissim': dissim
+    }
 
-# Save as JSON
-with open(output_dir, 'w') as json_file:
-    json.dump(data, json_file, indent=4)
+    # Save as JSON
+    with open(output_dir, 'w') as json_file:
+        json.dump(data, json_file, indent=4)
