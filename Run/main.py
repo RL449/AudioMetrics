@@ -7,15 +7,23 @@ from numpy import shape, mean
 from scipy.io import wavfile
 from scipy.signal import resample, find_peaks, hilbert
 
-warnings.filterwarnings("ignore") # Ignore warning messages
+warnings.filterwarnings("ignore")  # Ignore warning messages to avoid unnecessary output
 
-input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/output_10min" # Path containing .wav files
-output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.json" # Path to store .mat file
+# Define input/output directories
+input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/output_10min"  # Path containing .wav files
+output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.json"  # Path to store .mat file
 
-def down_sample(fs, x):
+
+def frequency_resample(fs, x):
     """
-    Lowers sample rate if too high.
-    Uses fourier method along axis x.
+    Adjust the sample rate of the audio data (downsample if necessary).
+
+    Args:
+    fs: Original sample rate of the audio data.
+    x: Audio signal data.
+
+    Returns:
+    Updated sample rate and audio data after downsampling or upsampling.
     """
     if fs == 576000:
         x = resample(x, len(x) // 4)
@@ -33,64 +41,74 @@ def down_sample(fs, x):
 
     return fs, x
 
+
 def minute_padding(num_timewin, pts_per_timewin, p_filt):
     """
-    Accommodate an extra time window.
-    Uses full minutes for easier, more accurate analysis
+    Pads the filtered signal to ensure that the length matches full minute time windows.
+
+    Args:
+    num_timewin: Total number of time windows for the signal.
+    pts_per_timewin: Number of points in each time window.
+    p_filt: Filtered audio signal.
+
+    Returns:
+    timechunk_matrix: Reshaped signal into a 2D matrix, where each column is a time window.
+    p_filt_padded: Padded filtered signal to match the required length.
     """
-    padding_length = num_timewin * pts_per_timewin - len(p_filt)
-    p_filt_padded = np.concatenate((p_filt, np.zeros(padding_length)))
-    timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)
+
+    padding_length = num_timewin * pts_per_timewin - len(p_filt)  # Calculate padding length required to fill all time windows
+    p_filt_padded = np.concatenate((p_filt, np.zeros(padding_length)))  # Pad the filtered signal with zeros
+    timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)  # Reshape padded signal into matrix with time window dimensions
     return timechunk_matrix, p_filt_padded
+
 
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
     """
-    f_WAV_frankenfunction: accepts acoustic data, hydrophone features, and processing preferences as inputs then outputs
-    calibrated soundscape metrics
-    Inputs:
-    num_bits = bit rate of hydrophone
-    peak_volts = voltage of the recorder, peak to peak
-    file_dir = the directory of files intended for processing
-    RS = hydrophone sensitivity
-    timewin = size of time windows in seconds for calculation of soundscape metrics
-    avtime = averaging time duration in seconds for autocorrelation measurements
-    fft_win = size of time window in minutes over which fft is performed
-    arti = enter 1 if there are artifacts such as calibration tones at the
-    begginings of recordings
-    flow = lower frequency cutoff
-    fhigh = upper frequency cutoff
+    Main function to process WAV files and compute various soundscape metrics.
 
-    Outputs:
-    SPLrms = matrix of root mean square sound pressure level, each column is a sound file, each row is 1 min of data
-    SPLpk = matrix of peak SPL (the highest SPL in a sample), each column is a sound file, each row is 1 min of data
-    impulsivity = uses kurtosis function to measure impulsive sounds
-    peakcount = a count of the # of times that the autocorrelation threshold is exceeded
-    autocorr = a matrix of autocorrelation calculations, each column is 1 min of data,
-    each row is the autocorrelation value calculated at .1 sec time
-    dissim = a matrix of the amount of uniformity between each 1 min of data
-    compared to the following minute of data, should have n-1 rows where n is
-    the number of minutes of data
+    Args:
+    num_bits: Bit rate of the audio data.
+    peak_volts: Peak voltage of the recorder.
+    file_dir: Directory of files to process.
+    RS: Hydrophone sensitivity in dB.
+    timewin: Size of time windows for analysis (in seconds).
+    avtime: Averaging time for autocorrelation.
+    fft_win: FFT window size for analysis.
+    arti: Indicates if the recording contains calibration tones (1 for true).
+    flow: Lower frequency cutoff for bandpass filtering.
+    fhigh: Upper frequency cutoff for bandpass filtering.
+
+    Returns:
+    SPLrms: Root mean square sound pressure level matrix.
+    SPLpk: Peak sound pressure level matrix.
+    impulsivity: Impulsivity measurements based on kurtosis.
+    peakcount: Count of peaks in autocorrelation function.
+    autocorr: Autocorrelation matrix for periodicity analysis.
+    dissim: Dissimilarity matrix comparing adjacent time windows.
     """
 
     num_files = len(file_dir)  # Number of .wav files in input directory
-    p = []  # Empty variable
-    pout = []
-    SPLrms = []  # Empty variable for SPLrms allows func to build from 0
-    SPLpk = []
-    impulsivity = []
-    peakcount = []
-    autocorr = None
-    dissim = []
+    p = []  # Placeholder for audio data
+    pout = []  # Placeholder for filtered audio data
+    SPLrms = []  # Root mean square (RMS) sound pressure level (SPL) for each time window
+    SPLpk = []  # Peak SPL for each time window
+    impulsivity = []  # Placeholder for impulsivity metric
+    peakcount = []  # Placeholder for periodicity metric (peak count)
+    autocorr = None  # Placeholder for autocorrelation results
+    dissim = []  # Placeholder for dissimilarity metric
 
-    for ii in range(num_files):  # ii is an index value - completes 1 loop for every file until all files are analyzed
-        filename = os.path.join(input_dir, file_dir[ii])
-        rs = (10 ** (RS / 20))
-        max_count = 2 ** num_bits
-        conv_factor = peak_volts / max_count
+    # Loop through each WAV file and process it
+    for ii in range(num_files):
+        filename = os.path.join(input_dir, file_dir[ii])  # Get full path of current file
+        rs = (10 ** (RS / 20))  # Convert hydrophone sensitivity from dB to a linear scale
+        max_count = 2 ** num_bits  # Calculate maximum count based on bit depth of audio data
+        conv_factor = peak_volts / max_count  # Calculate conversion factor for voltage
+
+        # Determine sample rate and audio data from .wav file
         fs, x = wavfile.read(filename)
 
         # Downsample if sample rate is too high
-        fs, x = down_sample(fs, x)
+        fs, x = frequency_resample(fs, x)
 
         if num_bits == 24:
             x = x >> 8  # Bit shift; accounts for audioread casting of 24 bit to 32 bit (zeroes behind)
@@ -99,7 +117,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
         p = v / rs  # Voltage to pressure
         if arti == 1:
-            p = p[6 * fs - 1:] # trims first 4 sec of recording to remove calibration tone
+            p = p[6 * fs - 1:]  # trims first 4 sec of recording to remove calibration tone
         pout.extend(p)  # Make this so the new p gets added at end of original p
 
         middle = len(pout) // 2
@@ -108,7 +126,8 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         pout = []
         pts_per_timewin = int(timewin * fs)  # Number of samples per time window - set window * 576 kHz sample rate
 
-        num_timewin = math.floor(len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
+        num_timewin = math.floor(
+            len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
 
         # Pad the signal
         timechunk_matrix, p_filt_padded = minute_padding(num_timewin, pts_per_timewin, p_filt)
@@ -154,7 +173,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     SPLpk = np.reshape(SPLpk, (num_files, int(len(SPLpk) / num_files)))
     SPLrms = np.reshape(SPLrms, (num_files, int(len(SPLrms) / num_files)))
 
-    autocorr = np.round(autocorr, 15)
+    autocorr = np.round(autocorr, 15)  # Ensures first row avoids 0.9999 and 1.0001 values
 
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
 
@@ -229,7 +248,7 @@ def kurtosis_reilly(x, flag=1, dim=None):
 
     x0 = x - np.nanmean(x, axis=dim, keepdims=True)
 
-    s2 = nanmean(x0**2, axis=dim)  # biased variance estimator
+    s2 = nanmean(x0 ** 2, axis=dim)  # biased variance estimator
     m4 = np.nanmean(np.power(x0, 4), axis=0)
 
     k = m4 / np.square(s2)  # Determine element-wise square
@@ -381,7 +400,7 @@ def distribute_array(arr_1d, dim):
     return arr_2d
 
 
-def distribute_array_2d(arr_1d, num_columns, num_rows = None):
+def distribute_array_2d(arr_1d, num_columns, num_rows=None):
     """
     If num_rows is not specified, calculate it based on the array length and num_columns.
     """
@@ -504,8 +523,8 @@ arti = 1  # Make 1 if calibration tone present
 timewin = 60  # Length of time window in seconds for analysis bins
 fft_win = 1  # Length of fft window in minutes
 avtime = 0.1
-flow = 50 # Low frequency
-fhigh = 300 # High frequency
+flow = 50  # Low frequency
+fhigh = 300  # High frequency
 
 if __name__ == '__main__':
     SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim = f_WAV_frankenfunction_reilly(
