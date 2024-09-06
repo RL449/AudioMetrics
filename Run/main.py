@@ -303,7 +303,7 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
     if fhigh == 0:
         fhigh = 1 / (2 * samint)
 
-    ifr = np.where((np.abs(freq) >= flow) & (np.abs(freq) <= fhigh))[0]
+    ifr = np.where((np.abs(freq) >= flow) & (np.abs(freq) <= fhigh))[0]  # Calculate metrics between flow and fhigh
     filtspec2 = np.zeros_like(spec, dtype=complex)
     rspec = np.zeros_like(spec)
     ispec = np.zeros_like(spec)
@@ -319,7 +319,7 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
 def f_solo_per_GM2(p_filt, fs, timewin, avtime):
     '''
-    Calculates peakcount and autocorrelation
+    Calculates peakcount and autocorrelation.
     '''
     p_av = []
     p_avtot = []
@@ -342,8 +342,6 @@ def f_solo_per_GM2(p_filt, fs, timewin, avtime):
         p_avi = np.mean(avwinmatrix, axis=0)
         p_av.append(p_avi)
 
-    p_av_dim1, p_av_dim2 = np.shape(p_av)
-
     p_av = np.transpose(p_av)
     p_avtot = np.array(p_av)
 
@@ -363,13 +361,15 @@ def f_solo_per_GM2(p_filt, fs, timewin, avtime):
 
 
 def distribute_array(arr_1d, dim):
-    # Calculate the number of elements per column
+    """
+    Calculate the number of elements per column.
+    Create a matrix, where the number of columns is equal to number of minutes in recording.
+    Appends vectors to create 2D matrix
+    """
     elements_per_column = len(arr_1d) // dim
 
-    # Create an empty 2D array with 10 columns
     arr_2d = np.empty((elements_per_column, dim))
 
-    # Iterate through the 1D array and place elements in the 2D array
     for i in range(dim):
         start_index = i * elements_per_column
         end_index = (i + 1) * elements_per_column
@@ -379,7 +379,9 @@ def distribute_array(arr_1d, dim):
 
 
 def distribute_array_2d(arr_1d, num_columns, num_rows = None):
-    # If num_rows is not specified, calculate it based on the array length and num_columns
+    """
+    If num_rows is not specified, calculate it based on the array length and num_columns.
+    """
     if num_rows is None:
         num_rows = len(arr_1d) // num_columns
 
@@ -387,16 +389,13 @@ def distribute_array_2d(arr_1d, num_columns, num_rows = None):
     if len(arr_1d) < num_rows * num_columns:
         raise ValueError("Input array is too small for the specified dimensions")
 
-    # Create an empty 2D array with the specified dimensions
+    # Create an empty 2D array with appropriate dimensions
     arr_2d = np.empty((num_rows, num_columns))
-
-    # Calculate the number of elements per column
-    elements_per_column = num_rows
 
     # Iterate through the 1D array and place elements in the 2D array
     for i in range(num_columns):
-        start_index = i * elements_per_column
-        end_index = (i + 1) * elements_per_column
+        start_index = i * num_rows
+        end_index = (i + 1) * num_rows
         arr_2d[:, i] = arr_1d[start_index:end_index]
 
     return arr_2d
