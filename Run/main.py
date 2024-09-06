@@ -5,14 +5,43 @@ import warnings
 import json
 from numpy import shape, mean
 from scipy.io import wavfile
-from scipy.signal import resample
-from scipy.signal import find_peaks
-from scipy.signal import hilbert
+from scipy.signal import resample, find_peaks, hilbert
 
 warnings.filterwarnings("ignore") # Ignore warning messages
 
 input_dir = "C:/Users/rlessard/Desktop/5593 organized/240406165958_240413225912/output_10min" # Path containing .wav files
 output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minutes/output_python.json" # Path to store .mat file
+
+def down_sample(fs, x):
+    """
+    Lowers sample rate if too high.
+    Uses fourier method along axis x.
+    """
+    if fs == 576000:
+        x = resample(x, len(x) // 4)
+        fs = fs // 4
+    elif fs == 288000:
+        x = resample(x, len(x) // 2)
+        fs = fs // 2
+    elif fs == 16000:
+        x = resample(x, len(x) * 9)
+        fs = fs * 9
+    elif fs == 512000:
+        roundNum = 4
+        x = resample(x, len(x) // roundNum)
+        fs = fs / 3.5555555555555555555
+
+    return fs, x
+
+def minute_padding(num_timewin, pts_per_timewin, p_filt):
+    """
+    Accommodate an extra time window.
+    Uses full minutes for easier, more accurate analysis
+    """
+    padding_length = num_timewin * pts_per_timewin - len(p_filt)
+    p_filt_padded = np.concatenate((p_filt, np.zeros(padding_length)))
+    timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)
+    return timechunk_matrix, p_filt_padded
 
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
     """
@@ -43,7 +72,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     the number of minutes of data
     """
 
-    num_files = len(file_dir)
+    num_files = len(file_dir)  # Number of .wav files in input directory
     p = []  # Empty variable
     pout = []
     SPLrms = []  # Empty variable for SPLrms allows func to build from 0
@@ -61,19 +90,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         fs, x = wavfile.read(filename)
 
         # Downsample if sample rate is too high
-        if fs == 576000:
-            x = resample(x, len(x) // 4)
-            fs = fs // 4
-        elif fs == 288000:
-            x = resample(x, len(x) // 2)
-            fs = fs // 2
-        elif fs == 16000:
-            x = resample(x, len(x) * 9)
-            fs = fs * 9
-        elif fs == 512000:
-            roundNum = 4
-            x = resample(x, len(x) // roundNum)
-            fs = fs / 3.5555555555555555555
+        fs, x = down_sample(fs, x)
 
         if num_bits == 24:
             x = x >> 8  # Bit shift; accounts for audioread casting of 24 bit to 32 bit (zeroes behind)
@@ -82,7 +99,7 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
         p = v / rs  # Voltage to pressure
         if arti == 1:
-            p = p[6 * fs - 1:] # trims first 4 sec of recording
+            p = p[6 * fs - 1:] # trims first 4 sec of recording to remove calibration tone
         pout.extend(p)  # Make this so the new p gets added at end of original p
 
         middle = len(pout) // 2
@@ -93,13 +110,11 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
         num_timewin = math.floor(len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
 
-        # Pad the signal to accomodate the extra time window
-        padding_length = num_timewin * pts_per_timewin - len(p_filt)
-        p_filt_padded = np.concatenate((p_filt, np.zeros(padding_length)))
-        timechunk_matrix = p_filt_padded.reshape(pts_per_timewin, num_timewin)
+        # Pad the signal
+        timechunk_matrix, p_filt_padded = minute_padding(num_timewin, pts_per_timewin, p_filt)
 
+        # Create matrices with correct dimensions
         tcm_rearrange = create_2d_array_by_columns(p_filt_padded, pts_per_timewin, num_timewin)
-        [tcmSizeA, tcmSizeB] = timechunk_matrix.shape
         rms_matrix = rms_reilly(timechunk_matrix, 0)
 
         SPLrmshold = 20 * np.log10(rms_matrix)  # Log transforms the rms pressure
@@ -107,8 +122,6 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         tcm_abs = abs(timechunk_matrix)
         l10_tcm = np.log10(tcm_abs)
         l10_tcm_20 = 20 * l10_tcm
-
-        max_values_per_column = np.max(l10_tcm_20, axis=0)
 
         SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
 
@@ -123,7 +136,6 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
         # Periodicity
         pkcount, acorr = f_solo_per_GM2(p_filt_padded, fs, timewin, avtime)
-
         peakcount.extend(pkcount)
 
         if autocorr is None:
@@ -131,14 +143,8 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         else:
             autocorr = np.column_stack((autocorr, acorr))
 
-        acmax = np.max(autocorr, axis=0)
-        acmin = np.min(autocorr, axis=0)
-        acmean = np.mean(autocorr, axis=0)
-        acmedian = np.median(autocorr, axis=0)
-
         # D-index
         Dfin = f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
-
         dissim.extend(Dfin)
 
     # Reshape metrics (One row per recording)
@@ -248,8 +254,7 @@ def rms_reilly(x, dim=None):
     Rewritten from MATLAB
     For vectors, RMS(X) is the root mean square value in X.
     For matrices, RMS(X) is a row vector containing the RMS value from each column.
-
-    Y = RMS(X,DIM) operates along the dimension DIM
+    Y = RMS(X,DIM) operates along the dimension DIM.
     '''
 
     global vertical_averages_sqrt
