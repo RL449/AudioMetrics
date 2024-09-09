@@ -62,6 +62,31 @@ def minute_padding(num_timewin, pts_per_timewin, p_filt):
     return timechunk_matrix, p_filt_padded
 
 
+def calculate_impulsivity(impulsivity, tcm_rearrange):
+    tcm_rearrange = np.array(tcm_rearrange)
+    kmat = kurtosis_reilly(tcm_rearrange)
+    impulsivity.extend(kmat)
+    return impulsivity
+
+
+def calculate_spl(rms_matrix, tcm_rearrange, SPLrms, SPLpk):
+    SPLrmshold = 20 * np.log10(rms_matrix)  # Log transforms the rms pressure
+    SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
+
+    SPLrms.extend(SPLrmshold)  # Logarithmic conversion of RMS values to SPL
+    SPLpk.extend(SPLpkhold)  # Find peak SPL for each time window
+    return SPLrms, SPLpk
+
+
+def calculate_autocorrelation(autocorr, acorr):
+    # Append autocorrelation results for each file
+    if autocorr is None:
+        autocorr = acorr
+    else:
+        autocorr = np.column_stack((autocorr, acorr))
+    return autocorr
+
+
 def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, avtime, fft_win, arti, flow, fhigh):
     """
     Main function to process WAV files and compute various soundscape metrics.
@@ -120,14 +145,11 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
             p = p[6 * fs - 1:]  # trims first 4 sec of recording to remove calibration tone
         pout.extend(p)  # Make this so the new p gets added at end of original p
 
-        middle = len(pout) // 2
-        p = []
         p_filt = dylan_bpfilt(pout, 1 / fs, flow, fhigh)
         pout = []
         pts_per_timewin = int(timewin * fs)  # Number of samples per time window - set window * 576 kHz sample rate
 
-        num_timewin = math.floor(
-            len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
+        num_timewin = math.floor(len(p_filt) / pts_per_timewin) + 1  # Number of time windows contained in the sound file
 
         # Pad the signal
         timechunk_matrix, p_filt_padded = minute_padding(num_timewin, pts_per_timewin, p_filt)
@@ -136,44 +158,30 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         tcm_rearrange = create_2d_array_by_columns(p_filt_padded, pts_per_timewin, num_timewin)
         rms_matrix = rms_reilly(timechunk_matrix, 0)
 
-        SPLrmshold = 20 * np.log10(rms_matrix)  # Log transforms the rms pressure
-        SPLpkhold = column_max_SPL(timechunk_matrix)  # Identifies the peak in rms pressure
-        tcm_abs = abs(timechunk_matrix)
-        l10_tcm = np.log10(tcm_abs)
-        l10_tcm_20 = 20 * l10_tcm
+        SPLrms, SPLpk = calculate_spl(rms_matrix, tcm_rearrange, SPLrms, SPLpk)
 
-        SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
-
-        SPLrms.extend(SPLrmshold)  # This var SPLrms is the outputted rms matrix
-        SPLpk.extend(SPLpkhold)  # Generates the pk matrix
-
-        # Impulsivity
-        tcm_rearrange = np.array(tcm_rearrange)
-        kmat = kurtosis_reilly(tcm_rearrange)
-
-        impulsivity.extend(kmat)
+        # Compute impulsivity (kurtosis) for the rearranged time windows
+        calculate_impulsivity(impulsivity, tcm_rearrange)
 
         # Periodicity
         pkcount, acorr = f_solo_per_GM2(p_filt_padded, fs, timewin, avtime)
         peakcount.extend(pkcount)
 
-        if autocorr is None:
-            autocorr = acorr
-        else:
-            autocorr = np.column_stack((autocorr, acorr))
+        autocorr = calculate_autocorrelation(autocorr, acorr)
 
-        # D-index
+        # CCalculate dissimilarity between adjacent time windows (D-index)
         Dfin = f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
         dissim.extend(Dfin)
 
-    # Reshape metrics (One row per recording)
+    # Reshape matrices (One row per recording)
     dissim = np.reshape(dissim, (num_files, int(len(dissim) / num_files)))
     impulsivity = np.reshape(impulsivity, (num_files, int(len(impulsivity) / num_files)))
     peakcount = np.reshape(peakcount, (num_files, int(len(peakcount) / num_files)))
     SPLpk = np.reshape(SPLpk, (num_files, int(len(SPLpk) / num_files)))
     SPLrms = np.reshape(SPLrms, (num_files, int(len(SPLrms) / num_files)))
 
-    autocorr = np.round(autocorr, 15)  # Ensures first row avoids 0.9999 and 1.0001 values
+    # Round autocorrelation values to avoid floating-point precision issues
+    autocorr = np.round(autocorr, 15)
 
     return SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim
 
@@ -508,8 +516,39 @@ def correl_5(ts1, ts2, lags, offset):
 
 
 def reshape_vertical(matrix):
+    """
+    Converts matrix dimensions from mxn to nxm
+    """
     matrix = [[matrix[j][i] for j in range(len(matrix))] for i in range(len(matrix[0]))]
     return matrix
+
+
+def write_to_json(output_dir, SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim):
+    """
+    Write calculated metrics to JSON file
+
+    Args:
+    output_dir: Path to save the output JSON file.
+    SPLrms: Matrix of SPLrms values.
+    SPLpk: Matrix of SPLpk values.
+    impulsivity: Matrix of impulsivity values.
+    peakcount: Matrix of peak count values.
+    autocorr: Matrix of autocorrelation values.
+    dissim: Matrix of dissimilarity values.
+    """
+    # Create a dictionary to hold all the results
+    result_data = {
+        'SPLrms': SPLrms,
+        'SPLpk': SPLpk,
+        'impulsivity': impulsivity,
+        'peakcount': peakcount,
+        'autocorr': autocorr.tolist(),
+        'dissim': dissim
+    }
+
+    # Write the dictionary to a JSON file
+    with open(output_dir, 'w') as f:
+        json.dump(result_data, f, indent=4)
 
 
 file_dir = os.listdir(input_dir)
@@ -537,15 +576,5 @@ if __name__ == '__main__':
     peakcount = reshape_vertical(peakcount)
     dissim = reshape_vertical(dissim)
 
-    data = {
-        'SPLrms': SPLrms,
-        'SPLpk': SPLpk,
-        'impulsivity': impulsivity,
-        'peakcount': peakcount,
-        'autocorr': autocorr.tolist(),  # Convert numpy array to list
-        'dissim': dissim
-    }
-
-    # Save as JSON
-    with open(output_dir, 'w') as json_file:
-        json.dump(data, json_file, indent=4)
+    # Write the results to a JSON file
+    write_to_json(output_dir, SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim)
