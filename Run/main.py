@@ -16,14 +16,15 @@ output_dir = "C:/Users/rlessard/Desktop/SoundscapeCodeDesktop/DataOutput/10_minu
 
 def frequency_resample(fs, x):
     """
-    Adjust the sample rate of the audio data (downsample if necessary).
+    Adjust the sample rate of the audio data by downsampling or upsampling as needed.
 
     Args:
     fs: Original sample rate of the audio data.
     x: Audio signal data.
 
     Returns:
-    Updated sample rate and audio data after downsampling or upsampling.
+    fs: Updated sample rate after resampling.
+    x: Resampled audio data.
     """
     if fs == 576000:
         x = resample(x, len(x) // 4)
@@ -63,23 +64,53 @@ def minute_padding(num_timewin, pts_per_timewin, p_filt):
 
 
 def calculate_impulsivity(impulsivity, tcm_rearrange):
-    tcm_rearrange = np.array(tcm_rearrange)
-    kmat = kurtosis_reilly(tcm_rearrange)
+    """
+    Calculate impulsivity using kurtosis of the rearranged time chunks.
+
+    Args:
+    impulsivity: List to store impulsivity values.
+    tcm_rearrange: Rearranged time chunk matrix.
+
+    Returns:
+    impulsivity: Updated list with calculated impulsivity values.
+    """
+    kmat = kurtosis_reilly(np.array(tcm_rearrange))
     impulsivity.extend(kmat)
     return impulsivity
 
 
 def calculate_spl(rms_matrix, tcm_rearrange, SPLrms, SPLpk):
-    SPLrmshold = 20 * np.log10(rms_matrix)  # Log transforms the rms pressure
-    SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
+    """
+        Calculate SPL (Sound Pressure Level) in both RMS and Peak formats.
 
-    SPLrms.extend(SPLrmshold)  # Logarithmic conversion of RMS values to SPL
-    SPLpk.extend(SPLpkhold)  # Find peak SPL for each time window
+        Args:
+        rms_matrix: RMS values of the time chunks.
+        tcm_rearrange: Rearranged time chunk matrix.
+        SPLrms: List to store SPL RMS values.
+        SPLpk: List to store SPL Peak values.
+
+        Returns:
+        SPLrms: Updated list with SPL RMS values.
+        SPLpk: Updated list with SPL Peak values.
+        """
+    SPLrmshold = 20 * np.log10(rms_matrix)
+    SPLpkhold = np.max(20 * np.log10(np.abs(tcm_rearrange)), axis=0)
+    SPLrms.extend(SPLrmshold)
+    SPLpk.extend(SPLpkhold)
     return SPLrms, SPLpk
 
 
 def calculate_autocorrelation(autocorr, acorr):
-    # Append autocorrelation results for each file
+    """
+    Calculate autocorrelation for periodicity analysis.
+
+    Args:
+    autocorr: Current autocorrelation matrix.
+    acorr: New autocorrelation values to append.
+
+    Returns:
+    autocorr: Updated autocorrelation matrix.
+    """
     if autocorr is None:
         autocorr = acorr
     else:
@@ -167,13 +198,14 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
         pkcount, acorr = f_solo_per_GM2(p_filt_padded, fs, timewin, avtime)
         peakcount.extend(pkcount)
 
+        # Autocorrelation
         autocorr = calculate_autocorrelation(autocorr, acorr)
 
-        # CCalculate dissimilarity between adjacent time windows (D-index)
+        # Calculate dissimilarity between adjacent time windows (D-index)
         Dfin = f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange)
         dissim.extend(Dfin)
 
-    # Reshape matrices (One row per recording)
+    # Reshape matrices (Convert from vector to matrix)
     dissim = np.reshape(dissim, (num_files, int(len(dissim) / num_files)))
     impulsivity = np.reshape(impulsivity, (num_files, int(len(impulsivity) / num_files)))
     peakcount = np.reshape(peakcount, (num_files, int(len(peakcount) / num_files)))
@@ -188,20 +220,20 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
 
 def create_2d_array_by_columns(input_array, row, col):
     """
-    Create matrix with data being inserted by column, rather than by row.
+    Creates a 2D array by filling data column-wise.
+
+    Args:
+    input_array: Input data to fill the array.
+    row: Number of rows.
+    col: Number of columns.
+
+    Returns:
+    result: 2D array with data filled column-wise.
     """
-    rows = row
-    cols = col
-
-    # Initialize the 2D array with zeros
-    result = [[0 for _ in range(cols)] for _ in range(rows)]
-
-    # Fill the 2D array by columns
-    for col in range(cols):
-        for row in range(rows):
-            index = col * rows + row
-            result[row][col] = input_array[index]
-
+    result = np.zeros((row, col))
+    for c in range(col):
+        for r in range(row):
+            result[r][c] = input_array[c * row + r]
     return result
 
 
@@ -227,14 +259,13 @@ def column_max_SPL(timechunk_matrix):
 
 def kurtosis_reilly(x, flag=1, dim=None):
     """
-    Rewritten from MATLAB
-    K = KURTOSIS(X) returns the sample kurtosis of the values in X.
-    For a vector input, K is the fourth central moment of X, divided by fourth power of its standard deviation.
-    For a matrix input, K is a row vector containing the sample kurtosis of each column of X.
-    For N-D arrays, KURTOSIS operates along the first non-singleton dimension
+    Calculates kurtosis of the input data.
 
-    KURTOSIS(X,0) adjusts the kurtosis for bias.
-    KURTOSIS(X,1) is the same as KURTOSIS(X), and does not adjust the bias.
+    Args:
+    x: Input data for kurtosis calculation.
+
+    Returns:
+    k: Kurtosis values.
     """
     flag = 1
 
@@ -325,8 +356,16 @@ def bpfilt_initial_values(ts, samint):
 
 def dylan_bpfilt(ts, samint, flow, fhigh):
     """
-    Create a bypass filter.
-    Uses maximum and minimum frequencies for metric calculations.
+    Performs bandpass filtering.
+
+    Args:
+    data: Input audio data.
+    fs_inv: Inverse of the sample rate.
+    flow: Lower frequency bound for filtering.
+    fhigh: Upper frequency bound for filtering.
+
+    Returns:
+    Filtered data.
     """
     npts, spec, aspec, pspec, freq = bpfilt_initial_values(ts, samint)
 
@@ -334,7 +373,6 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
         fhigh = 1 / (2 * samint)
 
     ifr = np.where((np.abs(freq) >= flow) & (np.abs(freq) <= fhigh))[0]  # Calculate metrics between flow and fhigh
-    filtspec2 = np.zeros_like(spec, dtype=complex)
     rspec = np.zeros_like(spec)
     ispec = np.zeros_like(spec)
 
@@ -348,11 +386,19 @@ def dylan_bpfilt(ts, samint, flow, fhigh):
 
 
 def f_solo_per_GM2(p_filt, fs, timewin, avtime):
-    '''
-    Calculates peakcount and autocorrelation.
-    '''
+    """
+    Function for calculating peak count and autocorrelation.
+
+    Args:
+    data: Input audio data.
+    fs: Sample rate of the audio data.
+    timewin: Time window size for analysis.
+    avtime: Averaging time for autocorrelation.
+
+    Returns:
+    Peak count and autocorrelation values.
+    """
     p_av = []
-    p_avtot = []
     avwin = int(fs * avtime)
     sampwin = int(fs * timewin)
     ntwin = len(p_filt) // sampwin  # Number of minutes
@@ -363,8 +409,6 @@ def f_solo_per_GM2(p_filt, fs, timewin, avtime):
     p_filt = p_filt ** 2
 
     numavwin = p_filt.shape[0] // avwin
-
-    p_av = []
 
     for jj in range(ntwin):
         avwinmatrix = distribute_array_2d(p_filt[:, jj], numavwin, avwin)
@@ -432,15 +476,23 @@ def distribute_array_2d(arr_1d, num_columns, num_rows=None):
 
 
 def f_solo_dissim_GM1(pts_per_timewin, num_timewin, fft_win, fs, tcm_rearrange):
-    '''
-    Calculates dissimilarity
-    '''
+    """
+    Function for calculating dissimilarity.
+
+    Args:
+    pts_per_timewin: Points per time window.
+    num_timewin: Number of time windows.
+    fft_win: FFT window size.
+    fs: Sample rate of the audio data.
+    tcm_rearrange: Rearranged time chunk matrix.
+    Returns:
+    Dissimilarity values.
+    """
     tcm_rearrange = np.array(tcm_rearrange)  # Uses numpy to perform mathematical operations
 
     pts_per_fft = int(fft_win * fs)  # Calc size fft window
     numfftwin = int(np.floor(pts_per_timewin / pts_per_fft))  # Number of fft windows
 
-    Dfin = []
     D = []
 
     for kk in range(num_timewin - 1):
