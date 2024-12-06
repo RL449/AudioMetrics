@@ -1325,13 +1325,113 @@ import os
 import warnings
 import json
 from scipy.io import wavfile
-from scipy.signal import resample, find_peaks, hilbert
+from scipy.signal import find_peaks, hilbert
 
 warnings.filterwarnings("ignore")  # Ignore warning messages to avoid unnecessary output
 
 # Define input/output directories
-input_dir = "C:/Users/rlessard/Desktop/runThisInput/long_recording"  # Path containing .wav files
+input_dir = "C:/Users/rlessard/Desktop/runThisInput/ble_two"  # Path containing .wav files
 output_dir = "C:/Users/rlessard/Desktop/runThisOutput/runThisPython.json"  # Path to store .mat file
+
+
+def downsample(x, N, phase=0):
+    """
+    Downsample input signal.
+
+    Parameters:
+        x : numpy.ndarray
+            The input signal (1D or 2D).
+        N : int
+            The downsample factor. Keep every N-th sample.
+        phase : int, optional
+            The sample offset (default is 0).
+
+    Returns:
+        numpy.ndarray
+            The downsampled signal.
+
+    Examples:
+        x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        y = downsample(x, 3)  # Downsample by 3
+        y_with_phase = downsample(x, 3, 2)  # Downsample by 3 with phase offset of 2
+    """
+
+    # Validate inputs
+    if not isinstance(x, np.ndarray):
+        raise ValueError("Input signal 'x' must be a numpy ndarray.")
+
+    if not isinstance(N, int) or N <= 0:
+        raise ValueError("Downsample factor 'N' must be a positive integer.")
+
+    if not isinstance(phase, int) or phase < 0 or phase >= N:
+        raise ValueError(f"Phase offset 'phase' must be an integer in the range [0, {N - 1}].")
+
+    # Downsample signal
+    if x.ndim == 1:
+        y = x[phase::N]  # Downsample 1D signal
+    elif x.ndim == 2:
+        y = x[phase::N, :]  # Downsample along rows for 2D signal
+    else:
+        raise ValueError("Input signal 'x' must be 1D or 2D.")
+
+    return y
+
+
+def upsample(x, N, phase=0):
+    """
+    Upsample input signal.
+
+    Parameters:
+        x : numpy.ndarray
+            The input signal (1D or 2D numpy array).
+        N : int
+            The upsample factor. Insert N-1 zeros between input samples.
+        phase : int, optional
+            The sample offset (default is 0).
+
+    Returns:
+        numpy.ndarray
+            The upsampled signal.
+
+    Examples:
+        x = np.array([1, 2, 3, 4])
+        y = upsample(x, 3)  # Upsample by 3
+        y_with_phase = upsample(x, 3, 2)  # Upsample by 3 with phase offset of 2
+    """
+
+    # Validate inputs
+    if not isinstance(x, np.ndarray):
+        raise ValueError("Input signal 'x' must be a numpy ndarray.")
+
+    if not isinstance(N, int) or N <= 0:
+        raise ValueError("Upsample factor 'N' must be a positive integer.")
+
+    if not isinstance(phase, int) or phase < 0 or phase >= N:
+        raise ValueError(f"Phase offset 'phase' must be an integer in the range [0, {N - 1}].")
+
+    # Save original size of x (possibly N-D)
+    size_x = x.shape
+
+    # Total elements in x
+    n_elements = x.size
+
+    # Convert to a column vector (1D array)
+    x_col = x.reshape(n_elements)
+
+    # Create an array for the upsampled signal
+    y_col = np.zeros(n_elements * N, dtype=x.dtype)
+
+    # Perform the upsampling
+    y_col[phase::N] = x_col
+
+    # Update the dimensions to reflect upsampling
+    new_size = list(size_x)
+    new_size[0] = new_size[0] * N  # Update the first dimension if 1D signal
+
+    # Restore N-D shape
+    y = y_col.reshape(new_size)
+
+    return y
 
 def frequency_resample(fs, x):
     """
@@ -1347,20 +1447,19 @@ def frequency_resample(fs, x):
     """
 
     if fs == 576000:
-        x = resample(x, len(x) // 4)
-        fs = fs // 4
+        x = downsample(x, 4)  # downsample by taking every 4th element
+        fs = fs / 4
     elif fs == 288000:
-        x = resample(x, len(x) // 2)
-        fs = fs // 2
+        x = downsample(x, 2)  # downsample by taking every 2nd element
+        fs = fs / 2
     elif fs == 16000:
-        x = resample(x, len(x) * 9)
+        x = upsample(x, 9)  # upsample by repeating each element 9 times
         fs = fs * 9
     elif fs == 8000:
-        x = resample(x, len(x) * 18)
+        x = upsample(x, 18)  # upsample by repeating each element 18 times
         fs = fs * 18
     elif fs == 512000:
-        roundNum = 4
-        x = resample(x, len(x) // roundNum)
+        x = downsample(x, 4)  # downsample by taking every 4th element
         fs = fs / 3.5555555555555555555
 
     return fs, x
@@ -1480,9 +1579,10 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     """
 
     num_files = len(file_dir)  # Number of .wav files in input directory
+    # print("num_files:", num_files)
     p = []  # Placeholder for audio data
     pout = []  # Placeholder for filtered audio data
-    SPLrms = []  # Root mean square (RMS) sound pressure level (SPL) for each time window
+    SPLrms = []  # Root-mean-square (RMS) sound pressure level (SPL) for each time window
     SPLpk = []  # Peak SPL for each time window
     impulsivity = []  # Placeholder for impulsivity metric
     peakcount = []  # Placeholder for periodicity metric (peak count)
@@ -1493,14 +1593,17 @@ def f_WAV_frankenfunction_reilly(num_bits, peak_volts, file_dir, RS, timewin, av
     for ii in range(num_files):
         filename = os.path.join(input_dir, file_dir[ii])  # Get full path of current file
         rs = (10 ** (RS / 20))  # Convert hydrophone sensitivity from dB to a linear scale
+        # print("rs:", rs)
         max_count = 2 ** num_bits  # Calculate maximum count based on bit depth of audio data
+        # print("max_count:", max_count)
         conv_factor = peak_volts / max_count  # Calculate conversion factor for voltage
+        # print("conv_factor:", conv_factor)
 
         # Determine sample rate and audio data from .wav file
         fs, x = wavfile.read(filename)
 
-        print("fs:", fs)
-        print("x:", x)
+        # print("fs:", fs)
+        # print("x:", x)
 
         # Downsample if sample rate is too high
         fs, x = frequency_resample(fs, x)
@@ -1975,3 +2078,4 @@ if __name__ == '__main__':
 
     # Write the results to a JSON file
     write_to_json(output_dir, SPLrms, SPLpk, impulsivity, peakcount, autocorr, dissim)
+
